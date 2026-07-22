@@ -1020,3 +1020,87 @@ main { grid-column: 2; min-width: 0; }
 @media (max-width: 960px) {
   .games-layout { grid-template-columns: 1fr; }
 }
+
+.trade-terminal {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 16px;
+}
+.trade-chart-panel { min-height: 420px; }
+.trade-assets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.asset-chip {
+  border: 1px solid #3b4664;
+  background: #121933;
+  color: #c5cbe0;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.asset-chip.on {
+  border-color: #6d67c2;
+  background: #1b2541;
+  color: #fff;
+}
+.trade-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.trade-price-row strong {
+  font-family: Sora, Manrope, sans-serif;
+  font-size: 28px;
+}
+.trade-price-row span { color: #8a93a9; font-size: 12px; }
+#chart-host {
+  height: 220px;
+  border-radius: 12px;
+  border: 1px solid #2a3550;
+  background: linear-gradient(180deg, #10182c, #0c1224);
+  overflow: hidden;
+}
+.trade-chart { width: 100%; height: 100%; display: block; }
+.open-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  min-height: 28px;
+  align-items: center;
+}
+.open-pill {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #1a2340;
+  border: 1px solid #3b4664;
+}
+.trade-ticket { display: grid; gap: 12px; align-content: start; }
+.payout-box {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #0d1327;
+  border: 1px solid #303a53;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.trade-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.call-btn, .put-btn {
+  border: 0;
+  border-radius: 10px;
+  padding: 16px 12px;
+  font-size: 16px;
+  font-weight: 800;
+  font-family: Sora, Manrope, sans-serif;
+  color: #fff;
+}
+.call-btn { background: linear-gradient(160deg, #3faf86, #2a7a5c); }
+.put-btn { background: linear-gradient(160deg, #e5756b, #b0454a); }
+.call-btn:hover { filter: brightness(1.06); }
+.put-btn:hover { filter: brightness(1.06); }
+.neg { color: #ef8d86; }
+
+@media (max-width: 960px) {
+  .trade-terminal { grid-template-columns: 1fr; }
+}
