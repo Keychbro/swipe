@@ -305,9 +305,12 @@ export function daysLeft(card) {
 
 export function periodProgress(state) {
   const cards = activeCards(state);
-  if (!cards.length) return { current: 0, total: 30 };
-  const left = Math.min(...cards.map(daysLeft));
-  return { current: 30 - left, total: 30 };
+  if (!cards.length) return { current: 0, total: 90 };
+  const totals = cards.map((c) => c.days || 90);
+  const lefts = cards.map(daysLeft);
+  const idx = lefts.indexOf(Math.min(...lefts));
+  const total = totals[idx] || 90;
+  return { current: Math.max(0, total - lefts[idx]), total };
 }
 
 export function initialsFromName(name) {
