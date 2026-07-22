@@ -4,9 +4,12 @@ import {
   VIP_PACK,
   REFERRAL_TIERS,
   REFERRAL_STAGES,
+  MISSIONS,
+  ACHIEVEMENTS,
   LEVEL_TARGET,
-  MIN_WITHDRAW,
+  MIN_WITHDRAW_SC,
   BREAK_EVEN_DAYS,
+  RUB_TO_SC,
   loadState,
   saveState,
   makeId,
@@ -20,10 +23,18 @@ import {
   nextReferralTier,
   estimateReferralBonus,
   recommendProduct,
-  tierClass,
   qualifiedReferrals,
   productEconomics,
   makeCardFromProduct,
+  rubToSc,
+  scToRub,
+  incomeMultiplier,
+  canClaimDaily,
+  dailyRewardAmount,
+  claimDailyBonus,
+  activateBoost,
+  claimMission,
+  claimAchievement,
 } from './state.js';
 
 let state = loadState();
@@ -32,6 +43,7 @@ const TITLE_MAP = {
   catalog: 'Карточки',
   withdrawals: 'Вывод средств',
   partners: 'Партнёрская программа',
+  bonuses: 'Бонусы',
   activity: 'Операции',
   faq: 'FAQ',
   privacy: 'Конфиденциальность',
@@ -40,67 +52,62 @@ const TITLE_MAP = {
 
 const HELP = {
   purchase:
-    'Баланс для покупок используется только для оформления карточек. Его нельзя вывести напрямую.',
+    'Баланс покупок в Swape Coin. Пополняется донатом: 1 ₽ = 12 SC. Тратится на карточки и VIP.',
   withdraw:
-    'Сюда зачисляется доход по активным карточкам. Вывод доступен от 100 ₽ на указанные реквизиты.',
+    `Сюда идёт доход по карточкам и часть ачивок. Вывод от ${MIN_WITHDRAW_SC} SC (≈ ${scToRub(MIN_WITHDRAW_SC)} ₽).`,
   level:
-    'Уровень растёт от объёма оформленных карточек. Следующий статус открывается при 500 ₽ оборота.',
-  live: 'Показатель растёт по активным карточкам. В демо начисление симулируется каждые несколько секунд.',
+    `Уровень растёт от XP и объёма карточек. Следующая отметка — ${LEVEL_TARGET} SC оборота.`,
+  live: 'Доход симулируется с учётом бустов, VIP и комбо за несколько карточек.',
   referral:
-    'Бонус считается как процент от первой покупки приглашённого. Уровень партнёра повышает ставку.',
+    'Бонус — процент от первой покупки реферала в SC. Уровень партнёра повышает ставку.',
+  sc: `Swape Coin (SC) — валюта кабинета. Донат: 1 ₽ = ${RUB_TO_SC} SC. При выводе SC снова переводятся в ₽ по тому же курсу.`,
 };
 
 const TERMS_HTML = `
   <h2 id="modal-title">Условия сервиса</h2>
   <div class="prose">
-    <p>SWIPE — демонстрационный кабинет. Карточки и доход — учебная механика интерфейса, а не финансовая рекомендация.</p>
+    <p>SWIPE — демонстрационный кабинет на Swape Coin (SC). Карточки и доход — учебная механика, не финансовая рекомендация.</p>
     <ul>
-      <li>Перед оформлением проверьте стоимость, расчётный доход и срок действия.</li>
-      <li>Минимальная сумма вывода — ${MIN_WITHDRAW} ₽.</li>
-      <li>Партнёрские бонусы начисляются по правилам программы и могут меняться.</li>
-      <li>Сервис не гарантирует доход; показатели носят иллюстративный характер.</li>
-      <li>Администрация не несёт ответственности за утрату доступа, закрытие сервиса или потерю средств.</li>
+      <li>Курс доната и вывода: 1 ₽ = ${RUB_TO_SC} SC.</li>
+      <li>Минимальный вывод — ${MIN_WITHDRAW_SC} SC (≈ ${scToRub(MIN_WITHDRAW_SC)} ₽).</li>
+      <li>Окупаемость карточек ориентировочно ${BREAK_EVEN_DAYS} дней, далее срок идёт в прибыль.</li>
+      <li>Администрация не несёт ответственности за утрату доступа, закрытие сервиса или потерю средств/SC.</li>
     </ul>
-    <p>Продолжая работу в кабинете, вы подтверждаете, что ознакомились с рисками, FAQ и политикой конфиденциальности.</p>
   </div>
 `;
 
 const FAQ_ITEMS = [
   {
-    q: 'Что такое SWIPE?',
-    a: 'Это демонстрационный личный кабинет с учебной механикой карточек и начислений. Интерфейс показывает, как может выглядеть кабинет пользователя, и не является инвестиционным продуктом.',
+    q: 'Что такое Swape Coin (SC)?',
+    a: `Это внутриигровая валюта кабинета. Донат: 1 ₽ = ${RUB_TO_SC} SC. Карточки, VIP и бонусы считаются в SC. При выводе SC конвертируются обратно в ₽ по тому же курсу.`,
   },
   {
-    q: 'Как оформить карточку?',
-    a: 'Пополните баланс для покупок, откройте раздел «Карточки», выберите тариф и подтвердите оформление. Сумма списывается с баланса покупок, карточка появляется в портфеле.',
-  },
-  {
-    q: 'Откуда берётся доход?',
-    a: `Каждая карточка каждый день начисляет фиксированный доход на баланс вывода. Правило экономики: примерно за ${BREAK_EVEN_DAYS} дней (около 2 месяцев) вы возвращаете стоимость карточки, а оставшийся срок идёт уже в прибыль.`,
+    q: 'Как устроена окупаемость карточек?',
+    a: `Дневной доход ≈ цена ÷ ${BREAK_EVEN_DAYS}. Примерно через 2 месяца вы возвращаете стоимость, оставшийся срок — прибыль. Пример: «Старт» ${PRODUCTS.find((p) => p.id === 'start').price} SC.`,
   },
   {
     q: 'Что такое VIP-аккаунт?',
-    a: `VIP-аккаунт стоит ${VIP_PACK.price} ₽ со скидкой и сразу включает три VIP-карточки номиналом 1000 ₽, 5000 ₽ и 12 000 ₽ (суммарно ${VIP_PACK.faceValue.toLocaleString('ru-RU')} ₽). Их также можно купить по отдельности по полной цене.`,
+    a: `VIP стоит ${VIP_PACK.priceRub.toLocaleString('ru-RU')} ₽ (= ${VIP_PACK.price.toLocaleString('ru-RU')} SC) и сразу выдаёт три VIP-карточки номиналом 1000 / 5000 / 12 000 ₽ в SC (суммарно 18 000 ₽).`,
   },
   {
-    q: 'Как работает партнёрская программа?',
-    a: 'Вы делитесь ссылкой. Когда приглашённый регистрируется и оформляет первую карточку, вам начисляется процент от её стоимости. Чем больше квалифицированных рефералов, тем выше ваш партнёрский уровень и ставка.',
+    q: 'Какие есть бонусы?',
+    a: 'Ежедневный стрик, миссии, достижения, буст дохода ×1.5 на час, комбо за 3+ карточек и бонус VIP к доходу.',
   },
   {
     q: 'Когда можно вывести средства?',
-    a: `Вывод доступен при балансе от ${MIN_WITHDRAW} ₽. Укажите сумму, способ и реквизиты. В демо заявка сначала уходит «в обработку», затем помечается выполненной.`,
+    a: `От ${MIN_WITHDRAW_SC} SC на балансе вывода. В форме видно эквивалент в ₽.`,
   },
   {
     q: 'Что будет, если сайт закроется?',
-    a: 'Сервис может быть остановлен в любой момент без предварительного уведомления. Администрация не компенсирует остатки на балансах, активные карточки, бонусы и заявки на вывод. Используйте кабинет только как демо и не вносите средства, которые не готовы потерять.',
+    a: 'Сервис может быть остановлен в любой момент. SC, карточки, бонусы и заявки на вывод могут исчезнуть без компенсации.',
   },
   {
     q: 'Кто отвечает за сохранность денег?',
-    a: 'Вы действуете на свой риск. SWIPE не гарантирует сохранность средств, доступность кабинета, исполнение выплат и непрерывность работы. Подробности — в политике конфиденциальности и условиях сервиса.',
+    a: 'Вы действуете на свой риск. Подробности — в политике конфиденциальности.',
   },
   {
     q: 'Как связаться с поддержкой?',
-    a: 'Через кнопку «Поддержка» в кабинете или email help@swipe.example. Ответ в демо моделируется уведомлением; реальные сроки и SLA не обещаются.',
+    a: 'Кнопка «Поддержка» или help@swipe.example.',
   },
 ];
 
@@ -122,7 +129,7 @@ function money(value, digits = 2) {
   return `${Number(value).toLocaleString('ru-RU', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
-  })} ₽`;
+  })} SC`;
 }
 
 function moneyPlain(value, digits = 2) {
@@ -130,6 +137,13 @@ function moneyPlain(value, digits = 2) {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
+}
+
+function rubMoney(value, digits = 0) {
+  return `${Number(value).toLocaleString('ru-RU', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })} ₽`;
 }
 
 function formatDate(ts) {
@@ -251,25 +265,28 @@ function renderOverview() {
   const volume = state.purchasedVolume;
   const progressPct = Math.min(100, (volume / LEVEL_TARGET) * 100);
   const recent = state.transactions.slice(0, 4);
+  const mult = incomeMultiplier(state);
+  const boostOn = state.bonuses?.boostUntil && state.bonuses.boostUntil > Date.now();
 
   document.querySelector('#overview').innerHTML = `
     <div class="welcome-row">
       <div>
         <p class="eyebrow">${weekdayLabel()}</p>
         <h1>Добрый день, ${firstNameFrom(state.user.name)}</h1>
-        <p class="muted">Показатели обновляются в реальном времени (демо-симуляция).</p>
+        <p class="muted">Валюта — Swape Coin · 1 ₽ = ${RUB_TO_SC} SC · множитель дохода ×${mult.toFixed(2)}</p>
       </div>
       <div class="welcome-actions">
         <button class="outline-button" type="button" id="open-help">⌄ <span>Справка по кабинету</span></button>
-        <button class="ghost-button" type="button" data-open-section="faq">Риски и FAQ</button>
+        <button class="ghost-button" type="button" data-open-section="bonuses">Бонусы ★</button>
       </div>
     </div>
 
     <div class="hero-card">
       <div class="hero-grid"></div>
-      <div class="hero-top"><span>ЗАРАБОТАНО СЕГОДНЯ</span><span class="live"><i></i>ONLINE</span></div>
+      <div class="hero-top"><span>ЗАРАБОТАНО СЕГОДНЯ</span><span class="live"><i></i>${boostOn ? 'BOOST ×1.5' : 'ONLINE'}</span></div>
       <div class="earnings">
         <strong id="today-earnings">${moneyPlain(state.earningsToday)}</strong>
+        <span class="sc-unit">SC</span>
         <span>+ ${moneyPlain(state.earningsFromMidnight)} с 00:00</span>
       </div>
       <div class="hero-bottom">
@@ -282,25 +299,25 @@ function renderOverview() {
 
     <div class="metric-grid">
       <article class="metric-card">
-        <div class="metric-title">Баланс для покупок <button class="info" type="button" data-tip="purchase" aria-label="Подробнее">i</button></div>
-        <strong>${moneyPlain(state.balances.purchase)} <small>₽</small></strong>
-        <p>Доступен для оформления карточек</p>
+        <div class="metric-title">Баланс покупок <button class="info" type="button" data-tip="purchase" aria-label="Подробнее">i</button></div>
+        <strong>${moneyPlain(state.balances.purchase)} <small>SC</small></strong>
+        <p>≈ ${rubMoney(scToRub(state.balances.purchase), 2)} · донат 1 ₽ = ${RUB_TO_SC} SC</p>
         <div class="metric-actions">
           <button class="text-button" type="button" data-open="catalog">Купить карточку <span>→</span></button>
-          <button class="ghost-button" type="button" id="open-deposit">Пополнить</button>
+          <button class="ghost-button" type="button" id="open-deposit">Донат</button>
         </div>
       </article>
       <article class="metric-card">
-        <div class="metric-title">Баланс для вывода <button class="info" type="button" data-tip="withdraw" aria-label="Подробнее">i</button></div>
-        <strong>${moneyPlain(state.balances.withdraw)} <small>₽</small></strong>
-        <p>Минимальная сумма вывода — ${MIN_WITHDRAW} ₽</p>
+        <div class="metric-title">Баланс вывода <button class="info" type="button" data-tip="withdraw" aria-label="Подробнее">i</button></div>
+        <strong>${moneyPlain(state.balances.withdraw)} <small>SC</small></strong>
+        <p>Вывод от ${MIN_WITHDRAW_SC} SC (≈ ${rubMoney(scToRub(MIN_WITHDRAW_SC))})</p>
         <button class="text-button" type="button" data-open="withdrawals">Условия вывода <span>→</span></button>
       </article>
       <article class="metric-card accent-card">
         <div class="metric-title">До следующего уровня <button class="info" type="button" data-tip="level" aria-label="Подробнее">i</button></div>
-        <strong>${moneyPlain(Math.max(0, LEVEL_TARGET - volume))} <small>₽</small></strong>
-        <p>Объём оформленных карточек</p>
-        <div class="progress-label"><span>${moneyPlain(volume)} ₽</span><span>${LEVEL_TARGET} ₽</span></div>
+        <strong>${moneyPlain(Math.max(0, LEVEL_TARGET - volume))} <small>SC</small></strong>
+        <p>Уровень игрока ${state.bonuses?.level || 1} · XP ${state.bonuses?.xp || 0}</p>
+        <div class="progress-label"><span>${moneyPlain(volume)} SC</span><span>${LEVEL_TARGET} SC</span></div>
         <div class="progress"><i style="width:${progressPct}%"></i></div>
       </article>
     </div>
@@ -331,9 +348,10 @@ function renderOverview() {
       </section>
       <section class="panel disclosure-panel">
         <div class="panel-heading"><div><p class="eyebrow">ПРОЗРАЧНОСТЬ</p><h2>Важная информация</h2></div></div>
-        <p>Карточки — демонстрационная механика. Перед оформлением ознакомьтесь с условиями, сроками и всеми ограничениями.</p>
+        <p>Все суммы в кабинете — Swape Coin. Донат конвертирует ₽ в SC, вывод — обратно. При закрытии сервиса средства могут пропасть без компенсации.</p>
         <div class="metric-actions">
           <button class="text-button" type="button" id="open-terms">Узнать об условиях <span>→</span></button>
+          <button class="text-button" type="button" data-tip="sc">Про SC <span>i</span></button>
         </div>
         <div class="mini-feed">
           <p class="eyebrow">ПОСЛЕДНИЕ ОПЕРАЦИИ</p>
@@ -344,7 +362,7 @@ function renderOverview() {
                     (tx) => `
             <div class="mini-row">
               <div><strong>${tx.title}</strong><span>${tx.detail}</span></div>
-              <b class="${tx.amount >= 0 ? 'pos' : 'neg'}">${tx.amount >= 0 ? '+' : ''}${moneyPlain(tx.amount)}</b>
+              <b class="${tx.amount >= 0 ? 'pos' : 'neg'}">${tx.amount >= 0 ? '+' : ''}${moneyPlain(tx.amount)} SC</b>
             </div>`
                   )
                   .join('')
@@ -372,13 +390,13 @@ function renderCatalog() {
 
     <div class="vip-pack ${state.user.vip ? 'owned' : ''}">
       <div>
-        <p class="eyebrow">VIP АККАУНТ · СКИДКА</p>
-        <strong>${VIP_PACK.name} за ${money(VIP_PACK.price, 0)}</strong>
-        <p>Вместо ${money(VIP_PACK.faceValue, 0)} номинала: VIP Nova 1000 ₽ + VIP Orbit 5000 ₽ + VIP Apex 12 000 ₽.</p>
-        <p class="vip-note">${state.user.vip ? 'У вас уже активирован VIP-аккаунт.' : 'Одна покупка — три VIP-карточки сразу начисляются в портфель.'}</p>
+        <p class="eyebrow">VIP АККАУНТ</p>
+        <strong>${VIP_PACK.name} · ${rubMoney(VIP_PACK.priceRub)}</strong>
+        <p>${money(VIP_PACK.price, 0)} вместо номинала ${money(VIP_PACK.faceValue, 0)}: Nova / Orbit / Apex (1000 / 5000 / 12 000 ₽ в SC).</p>
+        <p class="vip-note">${state.user.vip ? 'VIP уже активирован.' : `Скидка ${rubMoney(VIP_PACK.faceValueRub - VIP_PACK.priceRub)} к полному номиналу трёх VIP-карточек.`}</p>
       </div>
       <button class="primary-button compact-btn vip-btn" type="button" id="buy-vip-pack" ${state.user.vip || !canVip ? 'disabled' : ''}>
-        ${state.user.vip ? 'VIP активен' : canVip ? `Купить за ${money(VIP_PACK.price, 0)}` : 'Недостаточно средств'}
+        ${state.user.vip ? 'VIP активен' : canVip ? `Купить · ${money(VIP_PACK.price, 0)}` : 'Недостаточно SC'}
       </button>
     </div>
 
@@ -460,31 +478,33 @@ function paintCatalog() {
 
 function renderWithdrawals() {
   const available = state.balances.withdraw;
-  const canWithdraw = available >= MIN_WITHDRAW;
-  const need = Math.max(0, MIN_WITHDRAW - available);
-  const pct = Math.min(100, (available / MIN_WITHDRAW) * 100);
+  const canWithdraw = available >= MIN_WITHDRAW_SC;
+  const need = Math.max(0, MIN_WITHDRAW_SC - available);
+  const pct = Math.min(100, (available / MIN_WITHDRAW_SC) * 100);
 
   document.querySelector('#withdrawals').innerHTML = `
     <div class="welcome-row">
       <div>
         <p class="eyebrow">ФИНАНСЫ</p>
-        <h1>Вывод средств</h1>
-        <p class="muted">Управляйте доступными к выводу средствами.</p>
+        <h1>Вывод Swape Coin</h1>
+        <p class="muted">От ${MIN_WITHDRAW_SC} SC · курс ${RUB_TO_SC} SC = 1 ₽</p>
       </div>
     </div>
     <div class="withdraw-layout">
       <section class="withdraw-card">
         <div class="withdraw-card-top"><span>ДОСТУПНО К ВЫВОДУ</span><button class="info" type="button" data-tip="withdraw">i</button></div>
-        <strong>${moneyPlain(available)} <small>₽</small></strong>
+        <strong>${moneyPlain(available)} <small>SC</small></strong>
+        <p class="muted tight">≈ ${rubMoney(scToRub(available), 2)}</p>
         <div class="withdraw-progress">
           <div><span>До минимальной суммы</span><b>${money(need)}</b></div>
           <div class="progress"><i style="width:${pct}%"></i></div>
-          <small>Минимальная сумма выплаты — ${MIN_WITHDRAW} ₽</small>
+          <small>Минимум ${MIN_WITHDRAW_SC} SC (≈ ${rubMoney(scToRub(MIN_WITHDRAW_SC))})</small>
         </div>
         ${
           canWithdraw
             ? `<form id="withdraw-form" class="withdraw-form">
-                <label>Сумма<input name="amount" type="number" min="${MIN_WITHDRAW}" max="${available.toFixed(2)}" step="0.01" value="${available.toFixed(2)}" required /></label>
+                <label>Сумма SC<input name="amount" type="number" min="${MIN_WITHDRAW_SC}" max="${available.toFixed(2)}" step="1" value="${Math.floor(available)}" required /></label>
+                <p class="muted tight" id="withdraw-rub-hint">К выплате ≈ ${rubMoney(scToRub(Math.floor(available)), 2)}</p>
                 <label>Способ
                   <select name="method" required>
                     <option value="card">Банковская карта</option>
@@ -496,7 +516,7 @@ function renderWithdrawals() {
                 <button class="primary-button" type="submit">Заказать выплату</button>
               </form>`
             : `<button class="primary-button disabled-button" disabled>Заказать выплату</button>
-               <p class="disabled-note">Кнопка станет доступна при достижении минимальной суммы.</p>`
+               <p class="disabled-note">Нужно ещё ${money(need)} до порога вывода.</p>`
         }
       </section>
       <section class="panel history-panel">
@@ -507,12 +527,12 @@ function renderWithdrawals() {
                 .map(
                   (w) => `
               <div class="history-row">
-                <div><strong>${money(w.amount)}</strong><span>${w.methodLabel} · ${w.requisites}</span></div>
+                <div><strong>${money(w.amount)}</strong><span>${w.methodLabel} · ${w.requisites} · ≈ ${rubMoney(scToRub(w.amount), 2)}</span></div>
                 <div class="history-meta"><span class="status-pill ${w.status}">${w.statusLabel}</span><time>${formatDate(w.at)}</time></div>
               </div>`
                 )
                 .join('')}</div>`
-            : `<div class="empty-state"><span>↗</span><strong>Операций пока нет</strong><p>Здесь появится история ваших заявок на вывод.</p></div>`
+            : `<div class="empty-state"><span>↗</span><strong>Операций пока нет</strong><p>Здесь появится история заявок на вывод SC.</p></div>`
         }
       </section>
     </div>
@@ -662,10 +682,100 @@ function paintActivity() {
       (tx) => `
     <div class="history-row">
       <div><strong>${tx.title}</strong><span>${tx.detail} · ${tx.balance === 'purchase' ? 'баланс покупок' : 'баланс вывода'}</span></div>
-      <div class="history-meta"><b class="${tx.amount >= 0 ? 'pos' : 'neg'}">${tx.amount >= 0 ? '+' : ''}${moneyPlain(tx.amount)} ₽</b><time>${formatDate(tx.at)}</time></div>
+      <div class="history-meta"><b class="${tx.amount >= 0 ? 'pos' : 'neg'}">${tx.amount >= 0 ? '+' : ''}${moneyPlain(tx.amount)} SC</b><time>${formatDate(tx.at)}</time></div>
     </div>`
     )
     .join('');
+}
+
+function renderBonuses() {
+  const boostOn = state.bonuses?.boostUntil && state.bonuses.boostUntil > Date.now();
+  const boostLeft = boostOn ? Math.max(0, Math.ceil((state.bonuses.boostUntil - Date.now()) / 60000)) : 0;
+  const mult = incomeMultiplier(state);
+  const dailyAmt = dailyRewardAmount(state);
+  const claimedM = new Set(state.bonuses?.claimedMissions || []);
+  const claimedA = new Set(state.bonuses?.claimedAchievements || []);
+
+  document.querySelector('#bonuses').innerHTML = `
+    <div class="welcome-row">
+      <div>
+        <p class="eyebrow">ИГРОВОЙ СЛОЙ</p>
+        <h1>Бонусы и прогресс</h1>
+        <p class="muted">Стрики, миссии, бусты и достижения в Swape Coin.</p>
+      </div>
+      <div class="balance-chip">Уровень <b>${state.bonuses?.level || 1}</b> · XP ${state.bonuses?.xp || 0}</div>
+    </div>
+
+    <div class="bonus-hero">
+      <div>
+        <p class="eyebrow">МНОЖИТЕЛЬ ДОХОДА</p>
+        <strong>×${mult.toFixed(2)}</strong>
+        <p>Комбо карточек, VIP (+10%) и активный буст усиливают дневные начисления.</p>
+      </div>
+      <div class="bonus-actions">
+        <button class="primary-button compact-btn" type="button" id="claim-daily" ${canClaimDaily(state) ? '' : 'disabled'}>
+          ${canClaimDaily(state) ? `Стрик +${dailyAmt} SC` : 'Стрик уже получен'}
+        </button>
+        <button class="ghost-button" type="button" id="activate-boost" ${boostOn ? 'disabled' : ''}>
+          ${boostOn ? `Буст ещё ${boostLeft} мин` : 'Буст ×1.5 на час'}
+        </button>
+      </div>
+    </div>
+
+    <div class="partner-stats">
+      <article><span>Стрик</span><strong>${state.bonuses?.streak || 0}</strong><small>дней подряд</small></article>
+      <article><span>Активные карты</span><strong>${activeCards(state).length}</strong><small>комбо от 3 шт.</small></article>
+      <article><span>VIP</span><strong>${state.user.vip ? 'Да' : 'Нет'}</strong><small>+10% к доходу</small></article>
+      <article><span>Буст</span><strong>${boostOn ? 'ON' : 'OFF'}</strong><small>×1.5 на час</small></article>
+    </div>
+
+    <div class="two-column partner-tools">
+      <section class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">МИССИИ</p><h2>Задания на SC</h2></div></div>
+        <div class="mission-list">
+          ${MISSIONS.map((m) => {
+            const done = m.check(state);
+            const claimed = claimedM.has(m.id);
+            return `
+              <div class="mission-row ${done ? 'ready' : ''} ${claimed ? 'claimed' : ''}">
+                <div>
+                  <strong>${m.title}</strong>
+                  <span>${m.detail}</span>
+                </div>
+                <div class="mission-meta">
+                  <b class="pos">+${m.reward} SC</b>
+                  <button type="button" class="ghost-button" data-claim-mission="${m.id}" ${!done || claimed ? 'disabled' : ''}>
+                    ${claimed ? 'Получено' : done ? 'Забрать' : 'В процессе'}
+                  </button>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">ДОСТИЖЕНИЯ</p><h2>Награды на вывод</h2></div></div>
+        <div class="mission-list">
+          ${ACHIEVEMENTS.map((m) => {
+            const done = m.check(state);
+            const claimed = claimedA.has(m.id);
+            return `
+              <div class="mission-row ${done ? 'ready' : ''} ${claimed ? 'claimed' : ''}">
+                <div>
+                  <strong>${m.title}</strong>
+                  <span>${m.detail}</span>
+                </div>
+                <div class="mission-meta">
+                  <b class="pos">+${m.reward} SC</b>
+                  <button type="button" class="ghost-button" data-claim-achievement="${m.id}" ${!done || claimed ? 'disabled' : ''}>
+                    ${claimed ? 'Получено' : done ? 'Забрать' : 'Закрыто'}
+                  </button>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+      </section>
+    </div>
+  `;
 }
 
 function renderFaq() {
@@ -705,27 +815,27 @@ function renderPrivacy() {
     </div>
     <article class="legal-doc panel">
       <h2>1. Общие положения</h2>
-      <p>Настоящая политика описывает, какие данные может обрабатывать демонстрационный кабинет SWIPE и как пользователь принимает риски, связанные с использованием сервиса.</p>
+      <p>Настоящая политика описывает обработку данных в демонстрационном кабинете SWIPE и риски, связанные с использованием Swape Coin (SC) и сервиса в целом.</p>
 
       <h2>2. Какие данные используются</h2>
       <ul>
         <li>данные профиля: имя, email, настройки безопасности;</li>
-        <li>данные кабинета: балансы, карточки, операции, заявки на вывод;</li>
+        <li>данные кабинета: балансы SC, карточки, операции, заявки на вывод, бонусы;</li>
         <li>партнёрские данные: реферальный код, статусы приглашённых, бонусы;</li>
         <li>технические данные демо: состояние интерфейса в localStorage браузера.</li>
       </ul>
 
       <h2>3. Цели обработки</h2>
-      <p>Данные нужны только для работы демо-кабинета: отображения интерфейса, имитации операций и показа партнёрской механики. Мы не продаём персональные данные третьим лицам в рамках этой демонстрации.</p>
+      <p>Данные нужны для работы демо-кабинета: отображения интерфейса, имитации доната (₽ → SC), карточек, бонусов и вывода (SC → ₽).</p>
 
       <h2>4. Хранение</h2>
-      <p>В текущей версии состояние хранится локально в браузере пользователя. Очистка данных браузера, сброс демо или недоступность устройства могут привести к безвозвратной потере истории и балансов.</p>
+      <p>В текущей версии состояние хранится локально в браузере. Очистка данных браузера или сброс демо могут привести к безвозвратной потере SC и истории.</p>
 
       <h2>5. Отказ от ответственности и риски утраты средств</h2>
       <div class="legal-alert">
-        <p><strong>SWIPE не несёт никакой ответственности</strong>, если сайт будет закрыт, заблокирован, удалён, недоступен, изменён или прекратит работу по любой причине — включая технические сбои, решение администрации, действия хостинга, третьих лиц или форс-мажор.</p>
-        <p>В таких случаях <strong>деньги, остатки на балансах, активные карточки, партнёрские бонусы, заявки на вывод и любые иные начисления могут пропасть полностью</strong>. Компенсации, возвраты, восстановление доступа и гарантии выплат не предоставляются.</p>
-        <p>Пользователь подтверждает, что использует сервис добровольно, понимает учебный/демонстрационный характер механики и не предъявляет претензий к администрации в связи с утратой средств или невозможностью вывода.</p>
+        <p><strong>SWIPE не несёт никакой ответственности</strong>, если сайт будет закрыт, заблокирован, удалён, недоступен, изменён или прекратит работу по любой причине.</p>
+        <p>В таких случаях <strong>Swape Coin, остатки на балансах, активные карточки, партнёрские бонусы, стрики, миссии, заявки на вывод и любые иные начисления могут пропасть полностью</strong>. Компенсации и возвраты не предоставляются.</p>
+        <p>Пользователь подтверждает, что использует сервис добровольно и не предъявляет претензий в связи с утратой SC/средств или невозможностью вывода.</p>
       </div>
 
       <h2>6. Нет финансовых гарантий</h2>
@@ -796,6 +906,7 @@ function render() {
   if (active === 'catalog') renderCatalog();
   if (active === 'withdrawals') renderWithdrawals();
   if (active === 'partners') renderPartners();
+  if (active === 'bonuses') renderBonuses();
   if (active === 'activity') renderActivity();
   if (active === 'faq') renderFaq();
   if (active === 'privacy') renderPrivacy();
@@ -834,20 +945,31 @@ function register({ name, email, password }) {
     referralCode: email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 16) || 'user',
   };
   state.auth.loggedIn = true;
-  state.balances = { purchase: 250, withdraw: 0 };
+  state.balances = { purchase: rubToSc(250), withdraw: 0 };
   state.cards = [];
   state.purchasedVolume = 0;
   state.user.vip = false;
   state.user.status = 'Стандарт';
+  state.bonuses = {
+    streak: 0,
+    lastClaimDate: null,
+    boostUntil: null,
+    boostMult: 1,
+    boostUsed: false,
+    claimedMissions: [],
+    claimedAchievements: [],
+    xp: 0,
+    level: 1,
+  };
   state.earningsToday = 0;
   state.earningsFromMidnight = 0;
   state.transactions = [
     {
       id: makeId('tx'),
       type: 'deposit',
-      title: 'Стартовый бонус',
-      detail: 'Зачисление на баланс покупок',
-      amount: 250,
+      title: 'Стартовый донат',
+      detail: `250 ₽ × ${RUB_TO_SC}`,
+      amount: rubToSc(250),
       balance: 'purchase',
       at: Date.now(),
     },
@@ -856,7 +978,7 @@ function register({ name, email, password }) {
     {
       id: makeId('n'),
       title: 'Аккаунт создан',
-      body: `На баланс зачислено 250 ₽. Карточки окупаются примерно за ${BREAK_EVEN_DAYS} дней. VIP-пакет — ${VIP_PACK.price} ₽.`,
+      body: `Зачислено ${rubToSc(250)} SC. VIP — ${rubMoney(VIP_PACK.priceRub)}. Вывод от ${MIN_WITHDRAW_SC} SC.`,
       read: false,
       at: Date.now(),
     },
@@ -931,23 +1053,22 @@ function buyVipPack() {
     return;
   }
   if (state.balances.purchase < VIP_PACK.price) {
-    showToast('Недостаточно средств для VIP-аккаунта');
+    showToast('Недостаточно SC для VIP-аккаунта');
     return;
   }
   openModal(`
-    <h2 id="modal-title">VIP Аккаунт за ${money(VIP_PACK.price, 0)}</h2>
+    <h2 id="modal-title">VIP за ${rubMoney(VIP_PACK.priceRub)}</h2>
     <div class="prose">
-      <p>По скидке вы получаете сразу три VIP-карточки номиналом ${money(VIP_PACK.faceValue, 0)}:</p>
+      <p>Спишется ${money(VIP_PACK.price, 0)} (эквивалент ${rubMoney(VIP_PACK.priceRub)}). Номинал пакета — ${rubMoney(VIP_PACK.faceValueRub)}.</p>
       <ul>
         ${VIP_PACK.includes
           .map((id) => {
             const p = PRODUCTS.find((x) => x.id === id);
             const eco = productEconomics(p);
-            return `<li><strong>${p.name}</strong> — номинал ${money(p.price, 0)}, ${money(p.daily)}/день, срок ${p.days} дн., всего ~${money(eco.total)}</li>`;
+            return `<li><strong>${p.name}</strong> — ${money(p.price, 0)}, ${money(p.daily)}/день, срок ${p.days} дн., всего ~${money(eco.total)}</li>`;
           })
           .join('')}
       </ul>
-      <p>С баланса покупок спишется только ${money(VIP_PACK.price, 0)}. Статус аккаунта станет VIP.</p>
     </div>
     <div class="modal-actions">
       <button class="ghost-button" type="button" data-close-modal>Отмена</button>
@@ -964,14 +1085,15 @@ function confirmVipPack() {
   state.user.status = 'VIP';
   const cards = VIP_PACK.includes.map((id) => makeCardFromProduct(PRODUCTS.find((p) => p.id === id)));
   state.cards = [...cards, ...state.cards];
+  state.bonuses.xp = (state.bonuses.xp || 0) + 100;
   addTransaction({
     type: 'purchase',
     title: 'VIP Аккаунт',
-    detail: 'Nova + Orbit + Apex',
+    detail: `${rubMoney(VIP_PACK.priceRub)} · Nova+Orbit+Apex`,
     amount: -VIP_PACK.price,
     balance: 'purchase',
   });
-  pushNotification('VIP активирован', `Три VIP-карточки добавлены в портфель. Экономия относительно номинала — ${money(VIP_PACK.faceValue - VIP_PACK.price, 0)}.`);
+  pushNotification('VIP активирован', `Три VIP-карточки в портфеле. Экономия ${rubMoney(VIP_PACK.faceValueRub - VIP_PACK.priceRub)}.`);
   persist();
   closeModal();
   showToast('VIP-аккаунт активирован');
@@ -980,19 +1102,19 @@ function confirmVipPack() {
 
 function openDeposit() {
   openModal(`
-    <h2 id="modal-title">Пополнение баланса</h2>
+    <h2 id="modal-title">Донат → Swape Coin</h2>
     <form id="deposit-form" class="modal-form">
-      <label>Сумма<input name="amount" type="number" min="10" step="1" value="100" required /></label>
+      <label>Сумма доната, ₽<input name="amount" type="number" min="10" step="1" value="100" required /></label>
+      <p class="muted">Курс: 1 ₽ = ${RUB_TO_SC} SC. За 100 ₽ получите ${rubToSc(100)} SC на баланс покупок.</p>
       <label>Способ
         <select name="method">
           <option value="card">Банковская карта</option>
           <option value="sbp">СБП</option>
         </select>
       </label>
-      <p class="muted">Средства поступят на баланс для покупок (демо мгновенно).</p>
       <div class="modal-actions">
         <button class="ghost-button" type="button" data-close-modal>Отмена</button>
-        <button class="primary-button" type="submit">Пополнить</button>
+        <button class="primary-button" type="submit">Донатнуть</button>
       </div>
     </form>
   `);
@@ -1058,7 +1180,8 @@ function openHelp() {
     <div class="prose">
       <p><strong>Обзор</strong> — балансы, активные карточки и свежие операции.</p>
       <p><strong>Карточки</strong> — каталог с поиском и оформлением.</p>
-      <p><strong>Вывод</strong> — заявка от ${MIN_WITHDRAW} ₽ и история выплат.</p>
+      <p><strong>Вывод</strong> — от ${MIN_WITHDRAW_SC} SC с конвертацией в ₽.</p>
+      <p><strong>Бонусы</strong> — стрик, миссии, буст и достижения.</p>
       <p><strong>Партнёры</strong> — ссылка, бонусы и список приглашённых.</p>
       <p><strong>Операции</strong> — полная лента движений по балансам.</p>
       <p><strong>FAQ</strong> — ответы о рисках, выводе и закрытии сервиса.</p>
@@ -1331,8 +1454,8 @@ function bindGlobal() {
       const amount = Number(data.get('amount'));
       const method = String(data.get('method'));
       const requisites = String(data.get('requisites')).trim();
-      if (amount < MIN_WITHDRAW || amount > state.balances.withdraw) {
-        showToast('Проверьте сумму вывода');
+      if (amount < MIN_WITHDRAW_SC || amount > state.balances.withdraw) {
+        showToast('Проверьте сумму вывода в SC');
         return;
       }
       if (!requisites) {
@@ -1378,20 +1501,21 @@ function bindGlobal() {
     if (e.target.id === 'deposit-form') {
       e.preventDefault();
       const data = new FormData(e.target);
-      const amount = Number(data.get('amount'));
-      if (amount < 10) {
+      const rubAmount = Number(data.get('amount'));
+      if (rubAmount < 10) {
         showToast('Минимум 10 ₽');
         return;
       }
+      const amount = rubToSc(rubAmount);
       state.balances.purchase = Number((state.balances.purchase + amount).toFixed(2));
       addTransaction({
         type: 'deposit',
-        title: 'Пополнение баланса',
-        detail: data.get('method') === 'sbp' ? 'СБП' : 'Карта',
+        title: 'Донат → SC',
+        detail: `${rubMoney(rubAmount)} × ${RUB_TO_SC}`,
         amount,
         balance: 'purchase',
       });
-      pushNotification('Баланс пополнен', `+${money(amount)} на баланс покупок.`);
+      pushNotification('Донат зачислен', `+${money(amount)} на баланс покупок (из ${rubMoney(rubAmount)}).`);
       persist();
       closeModal();
       showToast(`Зачислено ${money(amount)}`);
@@ -1437,6 +1561,10 @@ function bindGlobal() {
 
   document.addEventListener('input', (e) => {
     if (e.target.id === 'catalog-search') paintCatalog();
+    if (e.target.closest('#withdraw-form') && e.target.name === 'amount') {
+      const hint = document.querySelector('#withdraw-rub-hint');
+      if (hint) hint.textContent = `К выплате ≈ ${rubMoney(scToRub(Number(e.target.value) || 0), 2)}`;
+    }
   });
   document.addEventListener('change', (e) => {
     if (e.target.id === 'catalog-filter') paintCatalog();
@@ -1470,6 +1598,71 @@ function bindGlobal() {
     }
     if (e.target.closest('#buy-vip-pack')) buyVipPack();
     if (e.target.closest('#confirm-vip-pack')) confirmVipPack();
+    if (e.target.closest('#claim-daily')) {
+      const result = claimDailyBonus(state);
+      if (!result.ok) {
+        showToast(result.reason);
+        return;
+      }
+      addTransaction({
+        type: 'bonus',
+        title: 'Ежедневный стрик',
+        detail: `День ${result.streak}`,
+        amount: result.amount,
+        balance: 'purchase',
+      });
+      pushNotification('Стрик получен', `+${money(result.amount)} · серия ${result.streak} дн.`);
+      persist();
+      showToast(`+${money(result.amount)} за стрик`);
+      render();
+    }
+    if (e.target.closest('#activate-boost')) {
+      const result = activateBoost(state);
+      if (!result.ok) {
+        showToast(result.reason);
+        return;
+      }
+      pushNotification('Буст активирован', 'Доход ×1.5 на ближайший час.');
+      persist();
+      showToast('Буст ×1.5 включён на 1 час');
+      render();
+    }
+    if (e.target.closest('[data-claim-mission]')) {
+      const id = e.target.closest('[data-claim-mission]').dataset.claimMission;
+      const result = claimMission(state, id);
+      if (!result.ok) {
+        showToast(result.reason);
+        return;
+      }
+      addTransaction({
+        type: 'bonus',
+        title: 'Миссия',
+        detail: MISSIONS.find((m) => m.id === id)?.title || id,
+        amount: result.amount,
+        balance: 'purchase',
+      });
+      persist();
+      showToast(`Миссия: +${money(result.amount)}`);
+      render();
+    }
+    if (e.target.closest('[data-claim-achievement]')) {
+      const id = e.target.closest('[data-claim-achievement]').dataset.claimAchievement;
+      const result = claimAchievement(state, id);
+      if (!result.ok) {
+        showToast(result.reason);
+        return;
+      }
+      addTransaction({
+        type: 'bonus',
+        title: 'Достижение',
+        detail: ACHIEVEMENTS.find((m) => m.id === id)?.title || id,
+        amount: result.amount,
+        balance: 'withdraw',
+      });
+      persist();
+      showToast(`Достижение: +${money(result.amount)} на вывод`);
+      render();
+    }
     if (e.target.closest('#confirm-buy')) confirmBuy(e.target.closest('#confirm-buy').dataset.product);
     if (e.target.closest('#detail-buy')) {
       const id = e.target.closest('#detail-buy').dataset.product;
@@ -1496,6 +1689,7 @@ function bindGlobal() {
       localStorage.removeItem('swipe-cabinet-v1');
       localStorage.removeItem('swipe-cabinet-v2');
       localStorage.removeItem('swipe-cabinet-v3');
+      localStorage.removeItem('swipe-cabinet-v4');
       state = loadState();
       state.auth.loggedIn = true;
       persist();

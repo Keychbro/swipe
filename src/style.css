@@ -846,3 +846,53 @@ main { grid-column: 2; min-width: 0; }
 @media (max-width: 700px) {
   .vip-pack { flex-direction: column; align-items: stretch; }
 }
+
+.sc-unit {
+  font: 700 18px Sora, Manrope, sans-serif;
+  color: #9de6c9;
+  margin-right: 8px;
+}
+.bonus-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 22px;
+  border-radius: 16px;
+  border: 1px solid #3d4670;
+  background:
+    radial-gradient(circle at 85% 15%, #65d5ad33, transparent 40%),
+    linear-gradient(125deg, #15243a, #171d33 55%, #241833);
+}
+.bonus-hero strong {
+  display: block;
+  font-family: Sora, Manrope, sans-serif;
+  font-size: 42px;
+  letter-spacing: -1px;
+  margin: 6px 0 8px;
+}
+.bonus-hero p { margin: 0; color: #a7b0c6; font-size: 12px; max-width: 420px; line-height: 1.55; }
+.bonus-actions { display: grid; gap: 10px; min-width: 180px; }
+.mission-list { display: grid; gap: 10px; margin-top: 12px; }
+.mission-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #2a3550;
+  background: #0f162b;
+}
+.mission-row.ready { border-color: #3f8f86; }
+.mission-row.claimed { opacity: .65; }
+.mission-row strong { display: block; font-size: 13px; }
+.mission-row span { color: #7e879c; font-size: 11px; }
+.mission-meta { display: grid; gap: 8px; justify-items: end; align-content: center; }
+.mission-meta .ghost-button { padding: 8px 10px; }
+.auth-hint { color: #9de6c9; }
+
+@media (max-width: 700px) {
+  .bonus-hero { flex-direction: column; align-items: stretch; }
+  .bonus-hero strong { font-size: 34px; }
+}
