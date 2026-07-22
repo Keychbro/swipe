@@ -1,6 +1,17 @@
-const STORAGE_KEY = 'swipe-cabinet-v1';
+const STORAGE_KEY = 'swipe-cabinet-v2';
 
 export const PRODUCTS = [
+  {
+    id: 'micro',
+    name: 'Микро',
+    price: 10,
+    daily: 0.04,
+    days: 14,
+    tag: 'МИКРО',
+    tier: 'mint',
+    letter: 'μ',
+    desc: 'Короткий входной тариф, чтобы проверить механику без крупной суммы.',
+  },
   {
     id: 'start',
     name: 'Старт',
@@ -25,6 +36,20 @@ export const PRODUCTS = [
     desc: 'Для тех, кто уже знаком с правилами и условиями.',
   },
   {
+    id: 'season',
+    name: 'Сезон',
+    price: 80,
+    daily: 0.55,
+    days: 21,
+    tag: 'ЛИМИТ',
+    tier: 'amber',
+    letter: 'Σ',
+    limited: true,
+    stock: 37,
+    stockMax: 50,
+    desc: 'Сезонное предложение с ограниченным количеством и ускоренным сроком.',
+  },
+  {
     id: 'momentum',
     name: 'Моментум',
     price: 150,
@@ -35,6 +60,30 @@ export const PRODUCTS = [
     letter: 'M',
     desc: 'Расширенный лимит с полными условиями в договоре.',
   },
+  {
+    id: 'pro',
+    name: 'Про',
+    price: 300,
+    daily: 2.1,
+    days: 45,
+    tag: 'ПРО',
+    tier: 'rose',
+    letter: 'Π',
+    desc: 'Длинный горизонт и максимальный расчётный дневной доход в каталоге.',
+  },
+];
+
+export const REFERRAL_TIERS = [
+  { id: 'basic', name: 'Базовый', min: 0, rate: 0.05, renewRate: 0.01, nextAt: 5 },
+  { id: 'advanced', name: 'Продвинутый', min: 5, rate: 0.08, renewRate: 0.02, nextAt: 15 },
+  { id: 'pro', name: 'Про', min: 15, rate: 0.12, renewRate: 0.03, nextAt: null },
+];
+
+export const REFERRAL_STAGES = [
+  { id: 'invited', label: 'Приглашён', hint: 'Перешёл по ссылке' },
+  { id: 'registered', label: 'Регистрация', hint: 'Создал аккаунт' },
+  { id: 'purchased', label: 'Покупка', hint: 'Оформил карточку' },
+  { id: 'active', label: 'Активен', hint: 'Карточка работает' },
 ];
 
 export const LEVEL_TARGET = 500;
@@ -129,6 +178,7 @@ function defaultState() {
     ],
     withdrawals: [],
     referrals: [],
+    seasonStock: 37,
     notifications: [
       {
         id: uid('n'),
@@ -154,10 +204,26 @@ function defaultState() {
 
 export function loadState() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('swipe-cabinet-v1');
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
-    return { ...defaultState(), ...parsed, auth: { ...defaultState().auth, ...parsed.auth }, user: { ...defaultState().user, ...parsed.user }, balances: { ...defaultState().balances, ...parsed.balances } };
+    const base = defaultState();
+    return {
+      ...base,
+      ...parsed,
+      auth: { ...base.auth, ...parsed.auth },
+      user: { ...base.user, ...parsed.user },
+      balances: { ...base.balances, ...parsed.balances },
+      seasonStock: parsed.seasonStock ?? base.seasonStock,
+      referrals: Array.isArray(parsed.referrals)
+        ? parsed.referrals.map((r) => ({
+            ...r,
+            bonus: Number(r.bonus || 0),
+            purchaseAmount: Number(r.purchaseAmount || 0),
+            stage: r.stage || (Number(r.bonus) > 0 ? 'active' : 'invited'),
+          }))
+        : [],
+    };
   } catch {
     return defaultState();
   }
@@ -209,4 +275,47 @@ export function initialsFromName(name) {
 
 export function firstNameFrom(name) {
   return String(name).trim().split(/\s+/)[0] || 'пользователь';
+}
+
+export function qualifiedReferrals(state) {
+  return state.referrals.filter((r) => ['purchased', 'active'].includes(r.stage));
+}
+
+export function referralTier(state) {
+  const count = qualifiedReferrals(state).length;
+  let current = REFERRAL_TIERS[0];
+  for (const tier of REFERRAL_TIERS) {
+    if (count >= tier.min) current = tier;
+  }
+  return { ...current, count };
+}
+
+export function nextReferralTier(state) {
+  const current = referralTier(state);
+  return REFERRAL_TIERS.find((t) => t.min > current.min) || null;
+}
+
+export function estimateReferralBonus(state, purchaseAmount) {
+  const tier = referralTier(state);
+  return Number((purchaseAmount * tier.rate).toFixed(2));
+}
+
+export function recommendProduct(balance) {
+  const affordable = PRODUCTS.filter((p) => {
+    if (p.limited && balance < p.price) return false;
+    return balance >= p.price;
+  }).sort((a, b) => b.price - a.price);
+  return affordable[0] || PRODUCTS[0];
+}
+
+export function tierClass(productTier) {
+  const map = {
+    orange: 'coral',
+    purple: 'violet',
+    blue: 'blue',
+    mint: 'mint',
+    amber: 'amber',
+    rose: 'rose',
+  };
+  return map[productTier] || productTier;
 }

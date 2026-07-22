@@ -7,9 +7,10 @@
     <title>SWIPE — личный кабинет</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet" />
   </head>
   <body>
+    <div class="ambient" aria-hidden="true"><span></span><span></span><span></span></div>
     <div id="auth-screen" class="auth-screen" hidden>
       <div class="auth-card">
         <div class="auth-brand"><span class="brand-mark"><i></i><i></i></span><strong>SWIPE</strong></div>
@@ -44,6 +45,8 @@
           <a class="nav-link" href="#withdrawals" data-nav="withdrawals"><span class="nav-icon">↗</span><span class="nav-text">Вывод средств</span></a>
           <a class="nav-link" href="#partners" data-nav="partners"><span class="nav-icon">◌</span><span class="nav-text">Партнёрская программа</span></a>
           <a class="nav-link" href="#activity" data-nav="activity"><span class="nav-icon">≡</span><span class="nav-text">Операции</span></a>
+          <a class="nav-link" href="#faq" data-nav="faq"><span class="nav-icon">?</span><span class="nav-text">FAQ</span></a>
+          <a class="nav-link" href="#privacy" data-nav="privacy"><span class="nav-icon">§</span><span class="nav-text">Конфиденциальность</span></a>
           <a class="nav-link" href="#settings" data-nav="settings"><span class="nav-icon">⚙</span><span class="nav-text">Настройки</span></a>
         </nav>
         <div class="sidebar-footer">
@@ -54,6 +57,8 @@
             <button class="more" id="profile-menu-btn" aria-label="Меню профиля" aria-expanded="false">•••</button>
             <div class="profile-menu" id="profile-menu" hidden>
               <button type="button" data-open-section="settings">Настройки</button>
+              <button type="button" data-open-section="faq">FAQ</button>
+              <button type="button" data-open-section="privacy">Политика</button>
               <button type="button" id="open-terms-btn">Условия сервиса</button>
               <button type="button" id="logout-btn" class="danger">Выйти</button>
             </div>
@@ -83,6 +88,8 @@
           <section class="page-section" id="withdrawals"></section>
           <section class="page-section" id="partners"></section>
           <section class="page-section" id="activity"></section>
+          <section class="page-section" id="faq"></section>
+          <section class="page-section" id="privacy"></section>
           <section class="page-section" id="settings"></section>
         </div>
       </main>

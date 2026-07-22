@@ -1,6 +1,8 @@
 import './style.css';
 import {
   PRODUCTS,
+  REFERRAL_TIERS,
+  REFERRAL_STAGES,
   LEVEL_TARGET,
   MIN_WITHDRAW,
   loadState,
@@ -12,6 +14,12 @@ import {
   periodProgress,
   initialsFromName,
   firstNameFrom,
+  referralTier,
+  nextReferralTier,
+  estimateReferralBonus,
+  recommendProduct,
+  tierClass,
+  qualifiedReferrals,
 } from './state.js';
 
 let state = loadState();
@@ -21,6 +29,8 @@ const TITLE_MAP = {
   withdrawals: 'Вывод средств',
   partners: 'Партнёрская программа',
   activity: 'Операции',
+  faq: 'FAQ',
+  privacy: 'Конфиденциальность',
   settings: 'Настройки',
 };
 
@@ -32,6 +42,8 @@ const HELP = {
   level:
     'Уровень растёт от объёма оформленных карточек. Следующий статус открывается при 500 ₽ оборота.',
   live: 'Показатель растёт по активным карточкам. В демо начисление симулируется каждые несколько секунд.',
+  referral:
+    'Бонус считается как процент от первой покупки приглашённого. Уровень партнёра повышает ставку.',
 };
 
 const TERMS_HTML = `
@@ -43,10 +55,46 @@ const TERMS_HTML = `
       <li>Минимальная сумма вывода — ${MIN_WITHDRAW} ₽.</li>
       <li>Партнёрские бонусы начисляются по правилам программы и могут меняться.</li>
       <li>Сервис не гарантирует доход; показатели носят иллюстративный характер.</li>
+      <li>Администрация не несёт ответственности за утрату доступа, закрытие сервиса или потерю средств.</li>
     </ul>
-    <p>Продолжая работу в кабинете, вы подтверждаете, что ознакомились с рисками и применимым законодательством.</p>
+    <p>Продолжая работу в кабинете, вы подтверждаете, что ознакомились с рисками, FAQ и политикой конфиденциальности.</p>
   </div>
 `;
+
+const FAQ_ITEMS = [
+  {
+    q: 'Что такое SWIPE?',
+    a: 'Это демонстрационный личный кабинет с учебной механикой карточек и начислений. Интерфейс показывает, как может выглядеть кабинет пользователя, и не является инвестиционным продуктом.',
+  },
+  {
+    q: 'Как оформить карточку?',
+    a: 'Пополните баланс для покупок, откройте раздел «Карточки», выберите тариф и подтвердите оформление. Сумма списывается с баланса покупок, карточка появляется в портфеле.',
+  },
+  {
+    q: 'Откуда берётся доход?',
+    a: 'В демо доход симулируется по активным карточкам и зачисляется на баланс для вывода. Расчётные показатели указаны до оформления и не гарантируются.',
+  },
+  {
+    q: 'Как работает партнёрская программа?',
+    a: 'Вы делитесь ссылкой. Когда приглашённый регистрируется и оформляет первую карточку, вам начисляется процент от её стоимости. Чем больше квалифицированных рефералов, тем выше ваш партнёрский уровень и ставка.',
+  },
+  {
+    q: 'Когда можно вывести средства?',
+    a: `Вывод доступен при балансе от ${MIN_WITHDRAW} ₽. Укажите сумму, способ и реквизиты. В демо заявка сначала уходит «в обработку», затем помечается выполненной.`,
+  },
+  {
+    q: 'Что будет, если сайт закроется?',
+    a: 'Сервис может быть остановлен в любой момент без предварительного уведомления. Администрация не компенсирует остатки на балансах, активные карточки, бонусы и заявки на вывод. Используйте кабинет только как демо и не вносите средства, которые не готовы потерять.',
+  },
+  {
+    q: 'Кто отвечает за сохранность денег?',
+    a: 'Вы действуете на свой риск. SWIPE не гарантирует сохранность средств, доступность кабинета, исполнение выплат и непрерывность работы. Подробности — в политике конфиденциальности и условиях сервиса.',
+  },
+  {
+    q: 'Как связаться с поддержкой?',
+    a: 'Через кнопку «Поддержка» в кабинете или email help@swipe.example. Ответ в демо моделируется уведомлением; реальные сроки и SLA не обещаются.',
+  },
+];
 
 const els = {
   auth: document.querySelector('#auth-screen'),
@@ -201,7 +249,10 @@ function renderOverview() {
         <h1>Добрый день, ${firstNameFrom(state.user.name)}</h1>
         <p class="muted">Показатели обновляются в реальном времени (демо-симуляция).</p>
       </div>
-      <button class="outline-button" type="button" id="open-help">⌄ <span>Справка по кабинету</span></button>
+      <div class="welcome-actions">
+        <button class="outline-button" type="button" id="open-help">⌄ <span>Справка по кабинету</span></button>
+        <button class="ghost-button" type="button" data-open-section="faq">Риски и FAQ</button>
+      </div>
     </div>
 
     <div class="hero-card">
@@ -296,6 +347,7 @@ function renderOverview() {
 }
 
 function renderCatalog() {
+  const tip = recommendProduct(state.balances.purchase);
   document.querySelector('#catalog').innerHTML = `
     <div class="welcome-row">
       <div>
@@ -305,16 +357,28 @@ function renderCatalog() {
       </div>
       <div class="balance-chip">Доступно: <b>${money(state.balances.purchase)}</b></div>
     </div>
+    <div class="recommend-banner">
+      <div>
+        <p class="eyebrow">РЕКОМЕНДАЦИЯ</p>
+        <strong>Вам сейчас ближе «${tip.name}»</strong>
+        <p>По балансу ${money(state.balances.purchase)} это наиболее подходящий доступный тариф.</p>
+      </div>
+      <button class="primary-button compact-btn" type="button" data-product="${tip.id}" ${state.balances.purchase >= tip.price ? '' : 'disabled'}>
+        Оформить ${money(tip.price, 0)}
+      </button>
+    </div>
     <div class="catalog-toolbar">
       <label class="search-field">Поиск<input id="catalog-search" type="search" placeholder="Название или тег" /></label>
       <select id="catalog-filter">
         <option value="all">Все карточки</option>
         <option value="affordable">Доступные по балансу</option>
         <option value="featured">Рекомендуемые</option>
+        <option value="short">Срок до 21 дня</option>
+        <option value="long">Срок от 30 дней</option>
       </select>
     </div>
     <div class="catalog-grid" id="catalog-grid"></div>
-    <div class="notice"><span>i</span><p>Расчётные показатели приведены исключительно для демонстрации интерфейса. Перед любой операцией проверяйте юридические условия, риски и применимое законодательство.</p></div>
+    <div class="notice"><span>i</span><p>Расчётные показатели приведены исключительно для демонстрации интерфейса. Перед любой операцией проверяйте юридические условия, риски и применимое законодательство. При закрытии сервиса средства могут быть утрачены без компенсации.</p></div>
   `;
   paintCatalog();
 }
@@ -328,7 +392,9 @@ function paintCatalog() {
     const hay = `${p.name} ${p.tag}`.toLowerCase();
     if (q && !hay.includes(q)) return false;
     if (filter === 'affordable') return state.balances.purchase >= p.price;
-    if (filter === 'featured') return Boolean(p.featured);
+    if (filter === 'featured') return Boolean(p.featured || p.limited);
+    if (filter === 'short') return p.days <= 21;
+    if (filter === 'long') return p.days >= 30;
     return true;
   });
 
@@ -338,21 +404,24 @@ function paintCatalog() {
   }
 
   grid.innerHTML = items
-    .map((p) => {
-      const canBuy = state.balances.purchase >= p.price;
+    .map((p, index) => {
+      const stock = p.limited ? state.seasonStock : null;
+      const soldOut = p.limited && stock <= 0;
+      const canBuy = !soldOut && state.balances.purchase >= p.price;
       return `
-      <article class="product-card ${p.featured ? 'featured' : ''}">
+      <article class="product-card tone-${p.tier} ${p.featured ? 'featured' : ''} ${p.limited ? 'limited' : ''}" style="--delay:${index * 40}ms">
         ${p.featured ? '<div class="featured-label">ВЫБОР ПОЛЬЗОВАТЕЛЕЙ</div>' : ''}
+        ${p.limited ? `<div class="stock-chip">Осталось ${stock} / ${p.stockMax}</div>` : ''}
         <div class="product-top"><span class="tier-icon ${p.tier}">${p.letter}</span><span class="tag">${p.tag}</span></div>
         <h2>${p.name}</h2>
         <p>${p.desc}</p>
         <div class="price-row"><span>Стоимость</span><strong>${money(p.price, 0)}</strong></div>
         <div class="income-row"><span>Расчётный доход в день</span><strong>${money(p.daily)}</strong></div>
-        <div class="terms">Срок действия: ${p.days} дней · ROI ~${((p.daily * p.days) / p.price * 100).toFixed(0)}%</div>
+        <div class="terms">Срок: ${p.days} дней · ROI ~${((p.daily * p.days) / p.price * 100).toFixed(0)}%</div>
         <div class="product-actions">
           <button class="ghost-button" type="button" data-detail-product="${p.id}">Подробнее</button>
           <button class="primary-button buy-button" type="button" data-product="${p.id}" ${canBuy ? '' : 'disabled'}>
-            ${canBuy ? `Оформить за ${money(p.price, 0)} <span>→</span>` : 'Недостаточно средств'}
+            ${soldOut ? 'Распродано' : canBuy ? `Оформить за ${money(p.price, 0)} <span>→</span>` : 'Недостаточно средств'}
           </button>
         </div>
       </article>`;
@@ -423,50 +492,106 @@ function renderWithdrawals() {
 
 function renderPartners() {
   const url = `swipe.example/r/${state.user.referralCode}`;
-  const bonusTotal = state.referrals.reduce((s, r) => s + r.bonus, 0);
+  const fullUrl = `https://${url}`;
+  const tier = referralTier(state);
+  const next = nextReferralTier(state);
+  const bonusTotal = state.referrals.reduce((s, r) => s + (r.bonus || 0), 0);
+  const qualified = qualifiedReferrals(state).length;
+  const progressMax = next ? next.min : tier.min || 1;
+  const progressPct = next ? Math.min(100, (qualified / next.min) * 100) : 100;
+  const calcProduct = PRODUCTS.find((p) => p.id === 'plus') || PRODUCTS[1];
+  const sampleBonus = estimateReferralBonus(state, calcProduct.price);
+
   document.querySelector('#partners').innerHTML = `
     <div class="welcome-row">
       <div>
         <p class="eyebrow">ПАРТНЁРСКАЯ ПРОГРАММА</p>
-        <h1>Приглашайте знакомых</h1>
-        <p class="muted">Получайте бонусы на условиях программы.</p>
+        <h1>Умная рефералка</h1>
+        <p class="muted">Процент от покупки, уровни и воронка приглашённых.</p>
       </div>
       <button class="outline-button" type="button" id="open-partner-rules">Правила программы</button>
     </div>
+
     <div class="referral-hero">
-      <div>
+      <div class="referral-copy">
         <span class="eyebrow">ВАША РЕФЕРАЛЬНАЯ ССЫЛКА</span>
         <h2>Делитесь SWIPE<br>с теми, кому доверяете.</h2>
-        <p>Условия начисления бонусов описаны в правилах партнёрской программы.</p>
+        <p>Бонус = ${(tier.rate * 100).toFixed(0)}% от первой покупки реферала на уровне «${tier.name}».</p>
         <div class="referral-link"><span id="referral-url">${url}</span><button type="button" id="copy-referral">Копировать</button></div>
-        <div class="partner-actions">
-          <button class="ghost-button" type="button" id="simulate-referral">Симулировать приглашение</button>
+        <div class="share-row">
+          <a class="share-btn tg" target="_blank" rel="noopener" href="https://t.me/share/url?url=${encodeURIComponent(fullUrl)}&text=${encodeURIComponent('Присоединяйся к SWIPE по моей ссылке')}">Telegram</a>
+          <a class="share-btn wa" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(`Присоединяйся к SWIPE: ${fullUrl}`)}">WhatsApp</a>
+          <button type="button" class="share-btn" id="share-native">Поделиться</button>
         </div>
       </div>
       <div class="orbital"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="ref-symbol">S</div></div>
     </div>
+
     <div class="partner-stats">
-      <article><span>Приглашено</span><strong>${state.referrals.length}</strong><small>пользователей</small></article>
+      <article><span>В воронке</span><strong>${state.referrals.length}</strong><small>приглашённых</small></article>
+      <article><span>Квалифицировано</span><strong>${qualified}</strong><small>с покупкой</small></article>
       <article><span>Бонусы</span><strong>${money(bonusTotal)}</strong><small>всего начислено</small></article>
-      <article><span>Ваш уровень</span><strong>${state.referrals.length >= 5 ? 'Продвинутый' : 'Базовый'}</strong><small>согласно условиям программы</small></article>
+      <article><span>Ваш уровень</span><strong>${tier.name}</strong><small>ставка ${(tier.rate * 100).toFixed(0)}% / повтор ${(tier.renewRate * 100).toFixed(0)}%</small></article>
     </div>
-    <section class="panel partner-list-panel">
-      <div class="panel-heading"><div><p class="eyebrow">ПРИГЛАШЁННЫЕ</p><h2>Список рефералов</h2></div></div>
+
+    <div class="two-column partner-tools">
+      <section class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">ПРОГРЕСС УРОВНЯ</p><h2>${tier.name}</h2></div><button class="info" type="button" data-tip="referral">i</button></div>
+        <p class="muted tight">Квалифицированные рефералы: ${qualified}${next ? ` из ${next.min} до уровня «${next.name}»` : ' — максимальный уровень'}</p>
+        <div class="progress-label"><span>${qualified}</span><span>${next ? next.min : 'max'}</span></div>
+        <div class="progress tall"><i style="width:${progressPct}%"></i></div>
+        <div class="tier-pills">
+          ${REFERRAL_TIERS.map((t) => `<span class="tier-pill ${t.id === tier.id ? 'on' : ''}">${t.name} · ${(t.rate * 100).toFixed(0)}%</span>`).join('')}
+        </div>
+      </section>
+      <section class="panel calc-panel">
+        <div class="panel-heading"><div><p class="eyebrow">КАЛЬКУЛЯТОР</p><h2>Сколько можно получить</h2></div></div>
+        <form id="referral-calc" class="calc-form">
+          <label>Друзей<input name="friends" type="number" min="1" max="50" value="3" /></label>
+          <label>Их первая карточка
+            <select name="product">
+              ${PRODUCTS.map((p) => `<option value="${p.id}" ${p.id === 'plus' ? 'selected' : ''}>${p.name} · ${money(p.price, 0)}</option>`).join('')}
+            </select>
+          </label>
+          <div class="calc-result">Ориентир бонуса: <strong id="calc-bonus">${money(sampleBonus * 3)}</strong></div>
+        </form>
+        <div class="partner-actions">
+          <button class="ghost-button" type="button" id="simulate-referral">Добавить в воронку</button>
+          <button class="primary-button compact-btn" type="button" id="advance-funnel">Продвинуть воронку</button>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel funnel-panel">
+      <div class="panel-heading"><div><p class="eyebrow">ВОРОНКА</p><h2>Статусы приглашённых</h2></div></div>
+      <div class="funnel-legend">
+        ${REFERRAL_STAGES.map((s) => `<div><b>${s.label}</b><span>${s.hint}</span></div>`).join('')}
+      </div>
       ${
         state.referrals.length
           ? `<div class="history-list">${state.referrals
-              .map(
-                (r) => `
-            <div class="history-row">
-              <div><strong>${r.name}</strong><span>${r.email} · ${r.status}</span></div>
-              <div class="history-meta"><b class="pos">+${money(r.bonus)}</b><time>${formatDate(r.at)}</time></div>
-            </div>`
-              )
+              .map((r) => {
+                const stageIndex = REFERRAL_STAGES.findIndex((s) => s.id === r.stage);
+                return `
+            <div class="history-row referral-row">
+              <div>
+                <strong>${r.name}</strong>
+                <span>${r.email}</span>
+                <div class="stage-track">${REFERRAL_STAGES.map((s, i) => `<i class="${i <= stageIndex ? 'on' : ''}" title="${s.label}"></i>`).join('')}</div>
+              </div>
+              <div class="history-meta">
+                <span class="status-pill">${REFERRAL_STAGES.find((s) => s.id === r.stage)?.label || r.stage}</span>
+                <b class="pos">${r.bonus ? `+${money(r.bonus)}` : '—'}</b>
+                <time>${formatDate(r.at)}</time>
+              </div>
+            </div>`;
+              })
               .join('')}</div>`
-          : `<div class="empty-state compact"><strong>Пока никого нет</strong><p>Поделитесь ссылкой — приглашённые появятся здесь.</p></div>`
+          : `<div class="empty-state compact"><strong>Воронка пуста</strong><p>Добавьте демо-реферала или поделитесь ссылкой.</p></div>`
       }
     </section>
   `;
+  bindReferralCalc();
 }
 
 function renderActivity() {
@@ -514,6 +639,96 @@ function paintActivity() {
     .join('');
 }
 
+function renderFaq() {
+  document.querySelector('#faq').innerHTML = `
+    <div class="welcome-row">
+      <div>
+        <p class="eyebrow">ПОМОЩЬ</p>
+        <h1>Частые вопросы</h1>
+        <p class="muted">Коротко о кабинете, рисках и ответственности.</p>
+      </div>
+      <button class="outline-button" type="button" data-open-section="privacy">Политика →</button>
+    </div>
+    <div class="risk-banner">
+      <strong>Важно</strong>
+      <p>Если сервис будет закрыт, доступ утрачен или выплаты остановлены — остатки средств, карточки и бонусы могут исчезнуть без компенсации. SWIPE не несёт за это ответственности.</p>
+    </div>
+    <div class="faq-list">
+      ${FAQ_ITEMS.map(
+        (item, i) => `
+        <details class="faq-item" ${i === 0 ? 'open' : ''}>
+          <summary>${item.q}</summary>
+          <p>${item.a}</p>
+        </details>`
+      ).join('')}
+    </div>
+  `;
+}
+
+function renderPrivacy() {
+  document.querySelector('#privacy').innerHTML = `
+    <div class="welcome-row">
+      <div>
+        <p class="eyebrow">ДОКУМЕНТЫ</p>
+        <h1>Политика конфиденциальности</h1>
+        <p class="muted">Редакция от 22 июля 2026 · демо-сервис SWIPE</p>
+      </div>
+    </div>
+    <article class="legal-doc panel">
+      <h2>1. Общие положения</h2>
+      <p>Настоящая политика описывает, какие данные может обрабатывать демонстрационный кабинет SWIPE и как пользователь принимает риски, связанные с использованием сервиса.</p>
+
+      <h2>2. Какие данные используются</h2>
+      <ul>
+        <li>данные профиля: имя, email, настройки безопасности;</li>
+        <li>данные кабинета: балансы, карточки, операции, заявки на вывод;</li>
+        <li>партнёрские данные: реферальный код, статусы приглашённых, бонусы;</li>
+        <li>технические данные демо: состояние интерфейса в localStorage браузера.</li>
+      </ul>
+
+      <h2>3. Цели обработки</h2>
+      <p>Данные нужны только для работы демо-кабинета: отображения интерфейса, имитации операций и показа партнёрской механики. Мы не продаём персональные данные третьим лицам в рамках этой демонстрации.</p>
+
+      <h2>4. Хранение</h2>
+      <p>В текущей версии состояние хранится локально в браузере пользователя. Очистка данных браузера, сброс демо или недоступность устройства могут привести к безвозвратной потере истории и балансов.</p>
+
+      <h2>5. Отказ от ответственности и риски утраты средств</h2>
+      <div class="legal-alert">
+        <p><strong>SWIPE не несёт никакой ответственности</strong>, если сайт будет закрыт, заблокирован, удалён, недоступен, изменён или прекратит работу по любой причине — включая технические сбои, решение администрации, действия хостинга, третьих лиц или форс-мажор.</p>
+        <p>В таких случаях <strong>деньги, остатки на балансах, активные карточки, партнёрские бонусы, заявки на вывод и любые иные начисления могут пропасть полностью</strong>. Компенсации, возвраты, восстановление доступа и гарантии выплат не предоставляются.</p>
+        <p>Пользователь подтверждает, что использует сервис добровольно, понимает учебный/демонстрационный характер механики и не предъявляет претензий к администрации в связи с утратой средств или невозможностью вывода.</p>
+      </div>
+
+      <h2>6. Нет финансовых гарантий</h2>
+      <p>Любые цифры дохода, ROI и бонусов носят иллюстративный характер. Сервис не является банком, платёжным оператором, инвестиционной платформой или гарантированным способом заработка.</p>
+
+      <h2>7. Передача и безопасность</h2>
+      <p>Пользователь обязан самостоятельно обеспечивать сохранность пароля и доступа к устройству. Администрация не отвечает за действия, совершённые после компрометации учётной записи.</p>
+
+      <h2>8. Контакты</h2>
+      <p>По вопросам политики и поддержки: <a href="mailto:help@swipe.example">help@swipe.example</a>. Отправка обращения не создаёт обязательств по ответу, возврату средств или продолжению работы сервиса.</p>
+
+      <h2>9. Согласие</h2>
+      <p>Продолжая пользоваться кабинетом, вы подтверждаете, что прочитали эту политику, FAQ и условия сервиса, принимаете риски утраты средств и соглашаетесь с полным отказом администрации от ответственности в случае закрытия сайта.</p>
+    </article>
+  `;
+}
+
+function bindReferralCalc() {
+  const form = document.querySelector('#referral-calc');
+  if (!form) return;
+  const update = () => {
+    const data = new FormData(form);
+    const friends = Math.max(1, Number(data.get('friends') || 1));
+    const product = PRODUCTS.find((p) => p.id === data.get('product')) || PRODUCTS[0];
+    const one = estimateReferralBonus(state, product.price);
+    const el = document.querySelector('#calc-bonus');
+    if (el) el.textContent = money(one * friends);
+  };
+  form.addEventListener('input', update);
+  form.addEventListener('change', update);
+}
+
 function renderSettings() {
   const u = state.user;
   document.querySelector('#settings').innerHTML = `
@@ -553,6 +768,8 @@ function render() {
   if (active === 'withdrawals') renderWithdrawals();
   if (active === 'partners') renderPartners();
   if (active === 'activity') renderActivity();
+  if (active === 'faq') renderFaq();
+  if (active === 'privacy') renderPrivacy();
   if (active === 'settings') renderSettings();
 }
 
@@ -621,6 +838,10 @@ function register({ name, email, password }) {
 function buyProduct(productId) {
   const product = PRODUCTS.find((p) => p.id === productId);
   if (!product) return;
+  if (product.limited && state.seasonStock <= 0) {
+    showToast('Сезонная карточка распродана');
+    return;
+  }
   if (state.balances.purchase < product.price) {
     showToast('Недостаточно средств на балансе покупок');
     return;
@@ -646,14 +867,20 @@ function buyProduct(productId) {
 function confirmBuy(productId) {
   const product = PRODUCTS.find((p) => p.id === productId);
   if (!product || state.balances.purchase < product.price) return;
+  if (product.limited && state.seasonStock <= 0) {
+    showToast('Сезонная карточка распродана');
+    closeModal();
+    return;
+  }
   state.balances.purchase = Number((state.balances.purchase - product.price).toFixed(2));
   state.purchasedVolume = Number((state.purchasedVolume + product.price).toFixed(2));
+  if (product.limited) state.seasonStock = Math.max(0, state.seasonStock - 1);
   const card = {
     id: makeId('card'),
     productId: product.id,
     name: product.name,
     letter: product.letter,
-    tier: product.tier === 'orange' ? 'coral' : product.tier === 'purple' ? 'violet' : 'blue',
+    tier: tierClass(product.tier),
     purchasedAt: '2026-07-22',
     daily: product.daily,
     days: product.days,
@@ -758,6 +985,8 @@ function openHelp() {
       <p><strong>Вывод</strong> — заявка от ${MIN_WITHDRAW} ₽ и история выплат.</p>
       <p><strong>Партнёры</strong> — ссылка, бонусы и список приглашённых.</p>
       <p><strong>Операции</strong> — полная лента движений по балансам.</p>
+      <p><strong>FAQ</strong> — ответы о рисках, выводе и закрытии сервиса.</p>
+      <p><strong>Конфиденциальность</strong> — политика и отказ от ответственности.</p>
       <p><strong>Настройки</strong> — профиль, пароль и 2FA (демо).</p>
     </div>
     <div class="modal-actions"><button class="primary-button" type="button" data-close-modal>Понятно</button></div>
@@ -789,13 +1018,15 @@ function openSupport() {
 
 function openPartnerRules() {
   openModal(`
-    <h2 id="modal-title">Правила партнёрской программы</h2>
+    <h2 id="modal-title">Правила умной рефералки</h2>
     <div class="prose">
       <ul>
-        <li>5% от первой покупки приглашённого — на баланс вывода.</li>
-        <li>Бонус начисляется после оформления карточки рефералом.</li>
-        <li>С 5 приглашённых открывается уровень «Продвинутый».</li>
-        <li>Самоприглашения и накрутка не засчитываются.</li>
+        <li>Бонус начисляется после первой покупки приглашённого: процент зависит от вашего уровня.</li>
+        <li>Базовый ${(REFERRAL_TIERS[0].rate * 100).toFixed(0)}% · Продвинутый ${(REFERRAL_TIERS[1].rate * 100).toFixed(0)}% · Про ${(REFERRAL_TIERS[2].rate * 100).toFixed(0)}%.</li>
+        <li>Уровень считается по квалифицированным рефералам (стадии «Покупка» и «Активен»).</li>
+        <li>Повторные покупки могут давать меньший процент (${(REFERRAL_TIERS[0].renewRate * 100).toFixed(0)}–${(REFERRAL_TIERS[2].renewRate * 100).toFixed(0)}%).</li>
+        <li>Саморефералы и накрутка не засчитываются.</li>
+        <li>Бонусы также могут быть утрачены при закрытии сервиса — без компенсации.</li>
       </ul>
     </div>
     <div class="modal-actions"><button class="primary-button" type="button" data-close-modal>Закрыть</button></div>
@@ -803,28 +1034,75 @@ function openPartnerRules() {
 }
 
 function simulateReferral() {
-  const names = ['Мария С.', 'Игорь В.', 'Ольга Н.', 'Дмитрий П.', 'Елена Р.'];
+  const names = ['Мария С.', 'Игорь В.', 'Ольга Н.', 'Дмитрий П.', 'Елена Р.', 'Кирилл А.', 'Анна М.'];
   const name = names[state.referrals.length % names.length];
-  const bonus = 2.5;
   state.referrals.unshift({
     id: makeId('ref'),
     name,
     email: `${name.split(' ')[0].toLowerCase()}@mail.example`,
-    status: 'Активирован',
-    bonus,
+    stage: 'invited',
+    bonus: 0,
+    purchaseAmount: 0,
     at: Date.now(),
   });
-  state.balances.withdraw = Number((state.balances.withdraw + bonus).toFixed(2));
-  addTransaction({
-    type: 'bonus',
-    title: 'Партнёрский бонус',
-    detail: name,
-    amount: bonus,
-    balance: 'withdraw',
-  });
-  pushNotification('Новый реферал', `${name} зарегистрировался по вашей ссылке. Бонус ${money(bonus)}.`);
+  pushNotification('Новый переход', `${name} открыл(а) вашу ссылку. Продвиньте воронку до покупки.`);
   persist();
-  showToast(`Приглашение учтено: +${money(bonus)}`);
+  showToast(`${name} добавлен(а) в воронку`);
+  render();
+}
+
+function advanceFunnel() {
+  const target = state.referrals.find((r) => r.stage !== 'active');
+  if (!target) {
+    showToast('Добавьте реферала в воронку');
+    return;
+  }
+  const order = ['invited', 'registered', 'purchased', 'active'];
+  const idx = order.indexOf(target.stage);
+  const next = order[Math.min(order.length - 1, idx + 1)];
+  target.stage = next;
+
+  if (next === 'registered') {
+    pushNotification('Регистрация реферала', `${target.name} создал(а) аккаунт.`);
+  }
+
+  if (next === 'purchased') {
+    const product = PRODUCTS[1 + (state.referrals.length % 3)];
+    const bonus = estimateReferralBonus(state, product.price);
+    target.purchaseAmount = product.price;
+    target.bonus = Number(((target.bonus || 0) + bonus).toFixed(2));
+    state.balances.withdraw = Number((state.balances.withdraw + bonus).toFixed(2));
+    addTransaction({
+      type: 'bonus',
+      title: 'Партнёрский бонус',
+      detail: `${target.name} · ${product.name}`,
+      amount: bonus,
+      balance: 'withdraw',
+    });
+    const tier = referralTier(state);
+    pushNotification('Покупка реферала', `${target.name} оформил(а) «${product.name}». Вам +${money(bonus)} (${(tier.rate * 100).toFixed(0)}%).`);
+    showToast(`Бонус ${money(bonus)} зачислен`);
+  }
+
+  if (next === 'active') {
+    const renew = Number(((target.purchaseAmount || 50) * referralTier(state).renewRate).toFixed(2));
+    if (renew > 0) {
+      target.bonus = Number(((target.bonus || 0) + renew).toFixed(2));
+      state.balances.withdraw = Number((state.balances.withdraw + renew).toFixed(2));
+      addTransaction({
+        type: 'bonus',
+        title: 'Повторный партнёрский бонус',
+        detail: target.name,
+        amount: renew,
+        balance: 'withdraw',
+      });
+      showToast(`Реферал активен · +${money(renew)}`);
+    } else {
+      showToast(`${target.name} теперь активен`);
+    }
+  }
+
+  persist();
   render();
 }
 
@@ -1105,6 +1383,15 @@ function bindGlobal() {
     }
     if (e.target.closest('#open-partner-rules')) openPartnerRules();
     if (e.target.closest('#simulate-referral')) simulateReferral();
+    if (e.target.closest('#advance-funnel')) advanceFunnel();
+    if (e.target.closest('#share-native')) {
+      const url = `https://${document.querySelector('#referral-url')?.textContent || ''}`;
+      if (navigator.share) {
+        navigator.share({ title: 'SWIPE', text: 'Присоединяйся к SWIPE', url }).catch(() => {});
+      } else {
+        navigator.clipboard?.writeText(url).then(() => showToast('Ссылка скопирована'));
+      }
+    }
     if (e.target.closest('#confirm-buy')) confirmBuy(e.target.closest('#confirm-buy').dataset.product);
     if (e.target.closest('#detail-buy')) {
       const id = e.target.closest('#detail-buy').dataset.product;
@@ -1129,6 +1416,7 @@ function bindGlobal() {
     }
     if (e.target.closest('#reset-demo')) {
       localStorage.removeItem('swipe-cabinet-v1');
+      localStorage.removeItem('swipe-cabinet-v2');
       state = loadState();
       state.auth.loggedIn = true;
       persist();
