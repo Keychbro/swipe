@@ -10,24 +10,53 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <div class="app-shell">
+    <div id="auth-screen" class="auth-screen" hidden>
+      <div class="auth-card">
+        <div class="auth-brand"><span class="brand-mark"><i></i><i></i></span><strong>SWIPE</strong></div>
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab active" data-auth-tab="login">Вход</button>
+          <button type="button" class="auth-tab" data-auth-tab="register">Регистрация</button>
+        </div>
+        <form id="login-form" class="auth-form">
+          <label>Email<input name="email" type="email" required placeholder="you@example.com" autocomplete="username" /></label>
+          <label>Пароль<input name="password" type="password" required minlength="6" placeholder="минимум 6 символов" autocomplete="current-password" /></label>
+          <button class="primary-button" type="submit">Войти <span>→</span></button>
+          <p class="auth-hint">Демо: alexey@example.com / demo1234</p>
+        </form>
+        <form id="register-form" class="auth-form" hidden>
+          <label>Имя<input name="name" type="text" required placeholder="Алексей К." autocomplete="name" /></label>
+          <label>Email<input name="email" type="email" required placeholder="you@example.com" autocomplete="email" /></label>
+          <label>Пароль<input name="password" type="password" required minlength="6" placeholder="минимум 6 символов" autocomplete="new-password" /></label>
+          <button class="primary-button" type="submit">Создать аккаунт <span>→</span></button>
+        </form>
+      </div>
+    </div>
+
+    <div class="app-shell" id="app-shell" hidden>
       <aside class="sidebar">
-        <a class="brand" href="#" aria-label="SWIPE, главная">
+        <a class="brand" href="#overview" aria-label="SWIPE, главная">
           <span class="brand-mark"><i></i><i></i></span>
           <span>SWIPE</span>
         </a>
         <nav class="side-nav" aria-label="Основная навигация">
-          <a class="nav-link active" href="#overview" data-nav="overview"><span class="nav-icon">⌘</span>Обзор</a>
-          <a class="nav-link" href="#catalog" data-nav="catalog"><span class="nav-icon">▦</span>Карточки</a>
-          <a class="nav-link" href="#withdrawals" data-nav="withdrawals"><span class="nav-icon">↗</span>Вывод средств</a>
-          <a class="nav-link" href="#partners" data-nav="partners"><span class="nav-icon">◌</span>Партнёрская программа</a>
+          <a class="nav-link active" href="#overview" data-nav="overview"><span class="nav-icon">⌘</span><span class="nav-text">Обзор</span></a>
+          <a class="nav-link" href="#catalog" data-nav="catalog"><span class="nav-icon">▦</span><span class="nav-text">Карточки</span></a>
+          <a class="nav-link" href="#withdrawals" data-nav="withdrawals"><span class="nav-icon">↗</span><span class="nav-text">Вывод средств</span></a>
+          <a class="nav-link" href="#partners" data-nav="partners"><span class="nav-icon">◌</span><span class="nav-text">Партнёрская программа</span></a>
+          <a class="nav-link" href="#activity" data-nav="activity"><span class="nav-icon">≡</span><span class="nav-text">Операции</span></a>
+          <a class="nav-link" href="#settings" data-nav="settings"><span class="nav-icon">⚙</span><span class="nav-text">Настройки</span></a>
         </nav>
         <div class="sidebar-footer">
-          <a class="support-link" href="mailto:help@swipe.example">?<span>Поддержка</span></a>
-          <div class="profile">
-            <div class="avatar">АК</div>
-            <div><strong>Алексей К.</strong><small>Статус: Стандарт</small></div>
-            <button class="more" aria-label="Меню профиля">•••</button>
+          <button type="button" class="support-link" id="open-support"><span class="support-badge">?</span><span>Поддержка</span></button>
+          <div class="profile" id="profile-block">
+            <div class="avatar" id="sidebar-avatar">АК</div>
+            <div><strong id="sidebar-name">Алексей К.</strong><small id="sidebar-status">Статус: Стандарт</small></div>
+            <button class="more" id="profile-menu-btn" aria-label="Меню профиля" aria-expanded="false">•••</button>
+            <div class="profile-menu" id="profile-menu" hidden>
+              <button type="button" data-open-section="settings">Настройки</button>
+              <button type="button" id="open-terms-btn">Условия сервиса</button>
+              <button type="button" id="logout-btn" class="danger">Выйти</button>
+            </div>
           </div>
         </div>
       </aside>
@@ -37,65 +66,38 @@
           <div class="mobile-brand">SWIPE</div>
           <div class="crumb"><span>Личный кабинет</span><b>/</b><strong id="page-title">Обзор</strong></div>
           <div class="top-actions">
-            <button class="icon-button" aria-label="Уведомления"><span class="notification-dot"></span>♧</button>
-            <button class="top-avatar">АК</button>
+            <div class="notify-wrap">
+              <button class="icon-button" id="notify-btn" aria-label="Уведомления" aria-expanded="false"><span class="notification-dot" id="notify-dot" hidden></span>♧</button>
+              <div class="notify-panel" id="notify-panel" hidden>
+                <div class="notify-head"><strong>Уведомления</strong><button type="button" id="mark-all-read">Прочитать все</button></div>
+                <div id="notify-list"></div>
+              </div>
+            </div>
+            <button class="top-avatar" id="top-avatar" aria-label="Профиль">АК</button>
           </div>
         </header>
 
         <div class="content">
-          <section class="page-section active" id="overview">
-            <div class="welcome-row">
-              <div><p class="eyebrow">СРЕДА, 22 ИЮЛЯ</p><h1>Добрый день, Алексей</h1><p class="muted">Ваши показатели обновляются в реальном времени.</p></div>
-              <button class="outline-button">⌄ <span>Справка по кабинету</span></button>
-            </div>
-
-            <div class="hero-card">
-              <div class="hero-grid"></div>
-              <div class="hero-top"><span>ЗАРАБОТАНО СЕГОДНЯ</span><span class="live"><i></i>ONLINE</span></div>
-              <div class="earnings"><strong id="today-earnings">0,38 ₽</strong><span>+ 0,07 ₽ с 00:00</span></div>
-              <div class="hero-bottom">
-                <div><span>Активные карточки</span><b>3</b></div>
-                <div><span>Прогресс периода</span><b>22 / 30 дней</b></div>
-                <a href="#catalog" class="hero-link">Открыть каталог <b>→</b></a>
-              </div>
-            </div>
-
-            <div class="metric-grid">
-              <article class="metric-card"><div class="metric-title">Баланс для покупок <button class="info" aria-label="Подробнее">i</button></div><strong>124,50 <small>₽</small></strong><p>Доступен для оформления карточек</p><button class="text-button" data-open="catalog">Купить карточку <span>→</span></button></article>
-              <article class="metric-card"><div class="metric-title">Баланс для вывода <button class="info" aria-label="Подробнее">i</button></div><strong>78,20 <small>₽</small></strong><p>Минимальная сумма вывода — 100 ₽</p><button class="text-button" data-open="withdrawals">Условия вывода <span>→</span></button></article>
-              <article class="metric-card accent-card"><div class="metric-title">До следующего уровня</div><strong>375,50 <small>₽</small></strong><p>Объём оформленных карточек</p><div class="progress-label"><span>124,50 ₽</span><span>500 ₽</span></div><div class="progress"><i></i></div></article>
-            </div>
-
-            <div class="two-column">
-              <section class="panel portfolio-panel"><div class="panel-heading"><div><p class="eyebrow">ПОРТФЕЛЬ</p><h2>Ваши карточки</h2></div><a href="#catalog">Все карточки →</a></div><div class="portfolio-list"><div class="portfolio-row"><div class="card-icon coral">S</div><div class="portfolio-name"><strong>Старт</strong><span>Оформлена 03.07.2026</span></div><div class="portfolio-income"><span>Доход за день</span><strong>0,10 ₽</strong></div><span class="status-pill">Активна</span></div><div class="portfolio-row"><div class="card-icon violet">P</div><div class="portfolio-name"><strong>Плюс</strong><span>Оформлена 10.07.2026</span></div><div class="portfolio-income"><span>Доход за день</span><strong>0,28 ₽</strong></div><span class="status-pill">Активна</span></div></div></section>
-              <section class="panel disclosure-panel"><div class="panel-heading"><div><p class="eyebrow">ПРОЗРАЧНОСТЬ</p><h2>Важная информация</h2></div></div><p>Карточки — демонстрационная механика. Перед оформлением ознакомьтесь с условиями, сроками и всеми ограничениями.</p><a href="#catalog" class="text-button">Узнать об условиях <span>→</span></a></section>
-            </div>
-          </section>
-
-          <section class="page-section" id="catalog">
-            <div class="welcome-row"><div><p class="eyebrow">КАТАЛОГ</p><h1>Выберите карточку</h1><p class="muted">Все параметры и срок действия указаны до оформления.</p></div><div class="balance-chip">Доступно: <b>124,50 ₽</b></div></div>
-            <div class="catalog-grid">
-              <article class="product-card"><div class="product-top"><span class="tier-icon orange">S</span><span class="tag">НАЧАЛЬНАЯ</span></div><h2>Старт</h2><p>Базовый вариант для знакомства с механикой сервиса.</p><div class="price-row"><span>Стоимость</span><strong>20 ₽</strong></div><div class="income-row"><span>Расчётный доход в день</span><strong>0,10 ₽</strong></div><div class="terms">Срок действия: 30 дней</div><button class="primary-button buy-button" data-product="Старт">Оформить за 20 ₽ <span>→</span></button></article>
-              <article class="product-card featured"><div class="featured-label">ВЫБОР ПОЛЬЗОВАТЕЛЕЙ</div><div class="product-top"><span class="tier-icon purple">P</span><span class="tag">РАСШИРЕННАЯ</span></div><h2>Плюс</h2><p>Для тех, кто уже знаком с правилами и условиями.</p><div class="price-row"><span>Стоимость</span><strong>50 ₽</strong></div><div class="income-row"><span>Расчётный доход в день</span><strong>0,28 ₽</strong></div><div class="terms">Срок действия: 30 дней</div><button class="primary-button buy-button" data-product="Плюс">Оформить за 50 ₽ <span>→</span></button></article>
-              <article class="product-card"><div class="product-top"><span class="tier-icon blue">M</span><span class="tag">ПРОФЕССИОНАЛЬНАЯ</span></div><h2>Моментум</h2><p>Расширенный лимит с полными условиями в договоре.</p><div class="price-row"><span>Стоимость</span><strong>150 ₽</strong></div><div class="income-row"><span>Расчётный доход в день</span><strong>0,90 ₽</strong></div><div class="terms">Срок действия: 30 дней</div><button class="primary-button buy-button" data-product="Моментум" disabled>Недостаточно средств</button></article>
-            </div>
-            <div class="notice"><span>i</span><p>Расчётные показатели приведены исключительно для демонстрации интерфейса. Перед любой операцией проверяйте юридические условия, риски и применимое законодательство.</p></div>
-          </section>
-
-          <section class="page-section" id="withdrawals">
-            <div class="welcome-row"><div><p class="eyebrow">ФИНАНСЫ</p><h1>Вывод средств</h1><p class="muted">Управляйте доступными к выводу средствами.</p></div></div>
-            <div class="withdraw-layout"><section class="withdraw-card"><div class="withdraw-card-top"><span>ДОСТУПНО К ВЫВОДУ</span><button class="info">i</button></div><strong>78,20 <small>₽</small></strong><div class="withdraw-progress"><div><span>До минимальной суммы</span><b>21,80 ₽</b></div><div class="progress"><i></i></div><small>Минимальная сумма выплаты — 100 ₽</small></div><button class="primary-button disabled-button" disabled>Заказать выплату</button><p class="disabled-note">Кнопка станет доступна при достижении минимальной суммы.</p></section><section class="panel history-panel"><div class="panel-heading"><div><p class="eyebrow">ИСТОРИЯ</p><h2>Последние операции</h2></div></div><div class="empty-state"><span>↗</span><strong>Операций пока нет</strong><p>Здесь появится история ваших заявок на вывод.</p></div></section></div>
-          </section>
-
-          <section class="page-section" id="partners">
-            <div class="welcome-row"><div><p class="eyebrow">ПАРТНЁРСКАЯ ПРОГРАММА</p><h1>Приглашайте знакомых</h1><p class="muted">Получайте бонусы на условиях программы.</p></div></div>
-            <div class="referral-hero"><div><span class="eyebrow">ВАША РЕФЕРАЛЬНАЯ ССЫЛКА</span><h2>Делитесь SWIPE<br>с теми, кому доверяете.</h2><p>Условия начисления бонусов описаны в правилах партнёрской программы.</p><div class="referral-link"><span id="referral-url">swipe.example/r/alexey-k</span><button id="copy-referral">Копировать</button></div></div><div class="orbital"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="ref-symbol">S</div></div></div>
-            <div class="partner-stats"><article><span>Приглашено</span><strong>0</strong><small>пользователей</small></article><article><span>Бонусы</span><strong>0,00 ₽</strong><small>всего начислено</small></article><article><span>Ваш уровень</span><strong>Базовый</strong><small>согласно условиям программы</small></article></div>
-          </section>
+          <section class="page-section active" id="overview"></section>
+          <section class="page-section" id="catalog"></section>
+          <section class="page-section" id="withdrawals"></section>
+          <section class="page-section" id="partners"></section>
+          <section class="page-section" id="activity"></section>
+          <section class="page-section" id="settings"></section>
         </div>
       </main>
     </div>
+
+    <div class="modal-root" id="modal-root" hidden>
+      <div class="modal-backdrop" data-close-modal></div>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <button class="modal-close" type="button" data-close-modal aria-label="Закрыть">×</button>
+        <div id="modal-body"></div>
+      </div>
+    </div>
+
     <div class="toast" role="status" aria-live="polite"></div>
+    <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
