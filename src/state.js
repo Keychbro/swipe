@@ -289,6 +289,10 @@ function defaultState() {
     referrals: [],
     seasonStock: 37,
     bonuses: defaultBonuses(),
+    games: {
+      mines: null,
+      stats: { wheelBets: 0, wheelWon: 0, minesBets: 0, minesWon: 0 },
+    },
     notifications: [
       {
         id: uid('n'),
@@ -345,6 +349,16 @@ export function loadState() {
       user: { ...base.user, ...parsed.user, vip: Boolean(parsed.user?.vip) },
       balances: { ...base.balances, ...parsed.balances },
       bonuses: { ...defaultBonuses(), ...parsed.bonuses },
+      games: {
+        mines: parsed.games?.mines || null,
+        stats: {
+          wheelBets: 0,
+          wheelWon: 0,
+          minesBets: 0,
+          minesWon: 0,
+          ...parsed.games?.stats,
+        },
+      },
       seasonStock: parsed.seasonStock ?? base.seasonStock,
       referrals: Array.isArray(parsed.referrals)
         ? parsed.referrals.map((r) => ({

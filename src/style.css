@@ -896,3 +896,127 @@ main { grid-column: 2; min-width: 0; }
   .bonus-hero { flex-direction: column; align-items: stretch; }
   .bonus-hero strong { font-size: 34px; }
 }
+
+.games-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.game-panel { overflow: hidden; }
+.game-form { display: grid; gap: 12px; margin-top: 14px; }
+.game-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  color: #7e879c;
+  font-size: 11px;
+}
+.wheel-wrap {
+  position: relative;
+  width: min(280px, 100%);
+  margin: 18px auto 8px;
+  aspect-ratio: 1;
+}
+.wheel-pointer {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 18px solid #e8ecf7;
+  filter: drop-shadow(0 2px 4px #0008);
+}
+.wheel {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 4px solid #3c4670;
+  background: conic-gradient(from -90deg, var(--wheel-bg));
+  box-shadow: inset 0 0 0 8px #0d132788, 0 18px 40px #0007;
+  position: relative;
+  transition: transform 0s;
+}
+.wheel-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 42px;
+  margin-left: -21px;
+  text-align: center;
+  font: 700 11px 'DM Mono', monospace;
+  color: #f3f5ff;
+  transform: rotate(var(--rot)) translateY(-105px);
+  text-shadow: 0 1px 2px #000a;
+}
+.mines-grid, .grid-preview {
+  display: grid;
+  grid-template-columns: repeat(var(--n), 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+.mine-cell {
+  aspect-ratio: 1;
+  border: 1px solid #3b4664;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #1a2340, #12192d);
+  color: #9de6c9;
+  font-size: 16px;
+  transition: .15s ease;
+}
+.mine-cell:hover:not(:disabled) {
+  border-color: #7a72d4;
+  transform: translateY(-1px);
+}
+.mine-cell.safe {
+  background: linear-gradient(160deg, #1c3b3c, #152a2b);
+  border-color: #3f8f86;
+}
+.mines-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #a7b0c6;
+}
+.mines-meta b { color: #f3f5ff; }
+.mines-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.grid-preview span {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  border: 1px dashed #2a3550;
+  background: #0f162b88;
+}
+.game-result {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.game-result.win {
+  background: #163528;
+  border: 1px solid #3d7a5d;
+  color: #9de6c9;
+}
+.game-result.lose {
+  background: #2a1822;
+  border: 1px solid #6a3d48;
+  color: #f0b0a8;
+}
+
+@media (max-width: 960px) {
+  .games-layout { grid-template-columns: 1fr; }
+}

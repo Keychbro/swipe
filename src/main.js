@@ -1,5 +1,20 @@
 import './style.css';
 import {
+  WHEEL_SEGMENTS,
+  wheelRtp,
+  pickWheelSegment,
+  wheelRotationForIndex,
+  MINES_GRID,
+  MINES_OPTIONS,
+  createMinesBoard,
+  minesMultiplier,
+  nextMinesMultiplier,
+  revealMineCell,
+  cashOutMines,
+  MIN_BET,
+  MAX_BET,
+} from './games.js';
+import {
   PRODUCTS,
   VIP_PACK,
   REFERRAL_TIERS,
@@ -38,12 +53,16 @@ import {
 } from './state.js';
 
 let state = loadState();
+let wheelAngle = 0;
+let wheelBusy = false;
+
 const TITLE_MAP = {
   overview: 'Обзор',
   catalog: 'Карточки',
   withdrawals: 'Вывод средств',
   partners: 'Партнёрская программа',
   bonuses: 'Бонусы',
+  games: 'Игры',
   activity: 'Операции',
   faq: 'FAQ',
   privacy: 'Конфиденциальность',
@@ -92,6 +111,10 @@ const FAQ_ITEMS = [
   {
     q: 'Какие есть бонусы?',
     a: 'Ежедневный стрик, миссии, достижения, буст дохода ×1.5 на час, комбо за 3+ карточек и бонус VIP к доходу.',
+  },
+  {
+    q: 'Что за игры?',
+    a: `Колесо фортуны и «Мины» — развлечение со ставками в SC. Шанс победы ниже 50/50: у колеса RTP около ${wheelRtp()}%, у мин заложен house edge ~6%. Казино в плюсе на дистанции. Это не способ гарантированно заработать.`,
   },
   {
     q: 'Когда можно вывести средства?',
@@ -778,6 +801,134 @@ function renderBonuses() {
   `;
 }
 
+function playBalance() {
+  return state.balances.purchase;
+}
+
+function renderGames() {
+  const stats = state.games?.stats || {};
+  const mines = state.games?.mines;
+  const mineCount = mines?.mineCount || 5;
+  const currentMult = mines && !mines.busted && !mines.cashed
+    ? minesMultiplier(mines.revealed.length, mines.mineCount, mines.grid)
+    : 1;
+  const nextMult = mines && !mines.busted && !mines.cashed
+    ? nextMinesMultiplier(mines.revealed.length, mines.mineCount, mines.grid)
+    : minesMultiplier(1, mineCount);
+  const potential = mines ? Number((mines.bet * currentMult).toFixed(2)) : 0;
+  const rtp = wheelRtp();
+
+  document.querySelector('#games').innerHTML = `
+    <div class="welcome-row">
+      <div>
+        <p class="eyebrow">КАЗИНО SC</p>
+        <h1>Игры</h1>
+        <p class="muted">Шанс ниже 50/50 · колесо RTP ~${rtp}% · мины house edge 6%</p>
+      </div>
+      <div class="balance-chip">На игру: <b>${money(playBalance())}</b></div>
+    </div>
+
+    <div class="risk-banner">
+      <strong>Казино в плюсе на дистанции</strong>
+      <p>Вероятности смещены в пользу дома. Это развлечение на SC, а не способ стабильно заработать. Ставки списываются с баланса покупок, выигрыш возвращается туда же.</p>
+    </div>
+
+    <div class="games-layout">
+      <section class="panel game-panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">КОЛЕСО ФОРТУНЫ</p><h2>Крути и лови множитель</h2></div>
+          <span class="tag">RTP ~${rtp}%</span>
+        </div>
+        <div class="wheel-wrap">
+          <div class="wheel-pointer"></div>
+          <div class="wheel" id="fortune-wheel" style="transform: rotate(${wheelAngle}deg); --wheel-bg: ${WHEEL_SEGMENTS.map((seg, i) => {
+            const slice = 100 / WHEEL_SEGMENTS.length;
+            const start = i * slice;
+            const end = (i + 1) * slice;
+            return `${seg.color} ${start}% ${end}%`;
+          }).join(', ')}">
+            ${WHEEL_SEGMENTS.map((seg, i) => {
+              const slice = 360 / WHEEL_SEGMENTS.length;
+              const rot = i * slice + slice / 2;
+              return `<span class="wheel-label" style="--rot:${rot}deg">${seg.label}</span>`;
+            }).join('')}
+          </div>
+        </div>
+        <form id="wheel-form" class="game-form">
+          <label>Ставка SC
+            <input name="bet" type="number" min="${MIN_BET}" max="${MAX_BET}" step="1" value="50" required />
+          </label>
+          <button class="primary-button" type="submit" id="spin-wheel-btn" ${wheelBusy ? 'disabled' : ''}>
+            ${wheelBusy ? 'Крутим…' : 'Крутить колесо'}
+          </button>
+        </form>
+        <p class="muted tight">Секторы ×0 чаще выигрышных. Редкие ×5 / ×10 не перекрывают перекос дома.</p>
+        <div class="game-stats">
+          <span>Ставок: ${stats.wheelBets || 0}</span>
+          <span>Выиграно: ${money(stats.wheelWon || 0)}</span>
+        </div>
+      </section>
+
+      <section class="panel game-panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">МИНЫ</p><h2>Открывай клетки, забирай вовремя</h2></div>
+          <span class="tag">edge 6%</span>
+        </div>
+        ${
+          mines && !mines.busted && !mines.cashed
+            ? `<div class="mines-live">
+                <div class="mines-meta">
+                  <span>Ставка <b>${money(mines.bet)}</b></span>
+                  <span>Мин <b>${mines.mineCount}</b></span>
+                  <span>Множитель <b>×${currentMult}</b></span>
+                  <span>К выплате <b class="pos">${money(potential)}</b></span>
+                </div>
+                <div class="mines-grid" style="--n:${mines.grid}">
+                  ${Array.from({ length: mines.grid * mines.grid }, (_, i) => {
+                    const open = mines.revealed.includes(i);
+                    return `<button type="button" class="mine-cell ${open ? 'safe' : ''}" data-mine-cell="${i}" ${open ? 'disabled' : ''}>${open ? '◆' : ''}</button>`;
+                  }).join('')}
+                </div>
+                <div class="mines-actions">
+                  <button class="ghost-button" type="button" id="mines-cashout" ${mines.revealed.length ? '' : 'disabled'}>Забрать ${money(potential)}</button>
+                  <span class="muted">След. клетка ≈ ×${nextMult}</span>
+                </div>
+              </div>`
+            : `<form id="mines-form" class="game-form">
+                <label>Ставка SC
+                  <input name="bet" type="number" min="${MIN_BET}" max="${MAX_BET}" step="1" value="50" required />
+                </label>
+                <label>Количество мин
+                  <select name="mines">
+                    ${MINES_OPTIONS.map((n) => `<option value="${n}" ${n === 5 ? 'selected' : ''}>${n} мин · старт ×${minesMultiplier(1, n)}</option>`).join('')}
+                  </select>
+                </label>
+                <button class="primary-button" type="submit">Начать раунд</button>
+              </form>
+              ${
+                mines?.busted
+                  ? `<div class="game-result lose">Мины сдетонировали. Ставка ${money(mines.bet)} сгорела.</div>`
+                  : mines?.cashed
+                    ? `<div class="game-result win">Забрано ${money(Number((mines.bet * minesMultiplier(mines.revealed.length, mines.mineCount)).toFixed(2)))} (×${minesMultiplier(mines.revealed.length, mines.mineCount)})</div>`
+                    : ''
+              }
+              <div class="mines-preview grid-preview" style="--n:${MINES_GRID}">
+                ${Array.from({ length: MINES_GRID * MINES_GRID }, () => '<span></span>').join('')}
+              </div>
+              <p class="muted tight">Чем больше мин и безопасных открытий — тем выше множитель. Но fair-odds урезаны на 6% в пользу дома.</p>`
+        }
+        <div class="game-stats">
+          <span>Ставок: ${stats.minesBets || 0}</span>
+          <span>Выиграно: ${money(stats.minesWon || 0)}</span>
+        </div>
+      </section>
+    </div>
+  `;
+
+  const wheel = document.querySelector('#fortune-wheel');
+  if (wheel) wheel.style.transform = `rotate(${wheelAngle}deg)`;
+}
+
 function renderFaq() {
   document.querySelector('#faq').innerHTML = `
     <div class="welcome-row">
@@ -907,6 +1058,7 @@ function render() {
   if (active === 'withdrawals') renderWithdrawals();
   if (active === 'partners') renderPartners();
   if (active === 'bonuses') renderBonuses();
+  if (active === 'games') renderGames();
   if (active === 'activity') renderActivity();
   if (active === 'faq') renderFaq();
   if (active === 'privacy') renderPrivacy();
@@ -961,6 +1113,7 @@ function register({ name, email, password }) {
     xp: 0,
     level: 1,
   };
+  state.games = { mines: null, stats: { wheelBets: 0, wheelWon: 0, minesBets: 0, minesWon: 0 } };
   state.earningsToday = 0;
   state.earningsFromMidnight = 0;
   state.transactions = [
@@ -1174,6 +1327,152 @@ function openProductDetail(productId) {
   `);
 }
 
+function ensureGamesState() {
+  if (!state.games) state.games = { mines: null, stats: { wheelBets: 0, wheelWon: 0, minesBets: 0, minesWon: 0 } };
+  if (!state.games.stats) state.games.stats = { wheelBets: 0, wheelWon: 0, minesBets: 0, minesWon: 0 };
+}
+
+function validateBet(raw) {
+  const bet = Number(raw);
+  if (!Number.isFinite(bet) || bet < MIN_BET) return { ok: false, reason: `Минимум ${MIN_BET} SC` };
+  if (bet > MAX_BET) return { ok: false, reason: `Максимум ${MAX_BET} SC` };
+  if (bet > playBalance()) return { ok: false, reason: 'Недостаточно SC на балансе покупок' };
+  return { ok: true, bet: Number(bet.toFixed(2)) };
+}
+
+function spinWheel(bet) {
+  ensureGamesState();
+  if (wheelBusy) return;
+  const check = validateBet(bet);
+  if (!check.ok) {
+    showToast(check.reason);
+    return;
+  }
+  wheelBusy = true;
+  state.balances.purchase = Number((state.balances.purchase - check.bet).toFixed(2));
+  state.games.stats.wheelBets = (state.games.stats.wheelBets || 0) + 1;
+  const { segment, index } = pickWheelSegment();
+  const target = wheelRotationForIndex(index, 5 + Math.floor(Math.random() * 3));
+  wheelAngle = target;
+  persist();
+  renderGames();
+
+  const wheel = document.querySelector('#fortune-wheel');
+  if (wheel) {
+    wheel.style.transition = 'transform 4.2s cubic-bezier(.12,.75,.12,1)';
+    wheel.style.transform = `rotate(${wheelAngle}deg)`;
+  }
+
+  setTimeout(() => {
+    const payout = Number((check.bet * segment.mult).toFixed(2));
+    if (payout > 0) {
+      state.balances.purchase = Number((state.balances.purchase + payout).toFixed(2));
+      state.games.stats.wheelWon = Number(((state.games.stats.wheelWon || 0) + payout).toFixed(2));
+      addTransaction({
+        type: 'bonus',
+        title: 'Колесо фортуны',
+        detail: `${segment.label} · ставка ${money(check.bet)}`,
+        amount: Number((payout - check.bet).toFixed(2)),
+        balance: 'purchase',
+      });
+      showToast(`Выпало ${segment.label} · +${money(payout)}`);
+    } else {
+      addTransaction({
+        type: 'bonus',
+        title: 'Колесо фортуны',
+        detail: `×0 · ставка ${money(check.bet)}`,
+        amount: -check.bet,
+        balance: 'purchase',
+      });
+      showToast(`Выпало ×0 · ставка сгорела`);
+    }
+    wheelBusy = false;
+    persist();
+    if (document.querySelector('.page-section.active')?.id === 'games') renderGames();
+    else updateChrome();
+  }, 4300);
+}
+
+function startMines(bet, mineCount) {
+  ensureGamesState();
+  if (state.games.mines && !state.games.mines.busted && !state.games.mines.cashed) {
+    showToast('Сначала завершите текущий раунд');
+    return;
+  }
+  const check = validateBet(bet);
+  if (!check.ok) {
+    showToast(check.reason);
+    return;
+  }
+  const mines = Number(mineCount);
+  if (!MINES_OPTIONS.includes(mines)) {
+    showToast('Выберите число мин');
+    return;
+  }
+  state.balances.purchase = Number((state.balances.purchase - check.bet).toFixed(2));
+  state.games.stats.minesBets = (state.games.stats.minesBets || 0) + 1;
+  const board = createMinesBoard(mines);
+  state.games.mines = { ...board, bet: check.bet };
+  addTransaction({
+    type: 'bonus',
+    title: 'Мины · ставка',
+    detail: `${mines} мин`,
+    amount: -check.bet,
+    balance: 'purchase',
+  });
+  persist();
+  showToast('Раунд мин начат — открывайте клетки');
+  renderGames();
+}
+
+function clickMineCell(index) {
+  ensureGamesState();
+  const board = state.games.mines;
+  if (!board || board.busted || board.cashed) return;
+  const result = revealMineCell(board, Number(index));
+  if (!result.ok) {
+    showToast(result.reason);
+    return;
+  }
+  if (result.hit) {
+    addTransaction({
+      type: 'bonus',
+      title: 'Мины · проигрыш',
+      detail: `Мина на клетке ${Number(index) + 1}`,
+      amount: 0,
+      balance: 'purchase',
+    });
+    pushNotification('Мины', `Попали на мину. Ставка ${money(board.bet)} сгорела.`);
+    showToast('Boom! Мина');
+  }
+  persist();
+  renderGames();
+}
+
+function doMinesCashout() {
+  ensureGamesState();
+  const board = state.games.mines;
+  if (!board) return;
+  const result = cashOutMines(board);
+  if (!result.ok) {
+    showToast(result.reason);
+    return;
+  }
+  const payout = Number((board.bet * result.multiplier).toFixed(2));
+  state.balances.purchase = Number((state.balances.purchase + payout).toFixed(2));
+  state.games.stats.minesWon = Number(((state.games.stats.minesWon || 0) + payout).toFixed(2));
+  addTransaction({
+    type: 'bonus',
+    title: 'Мины · выигрыш',
+    detail: `×${result.multiplier} · ${board.revealed.length} клеток`,
+    amount: Number((payout - board.bet).toFixed(2)),
+    balance: 'purchase',
+  });
+  persist();
+  showToast(`Забрано ${money(payout)}`);
+  renderGames();
+}
+
 function openHelp() {
   openModal(`
     <h2 id="modal-title">Справка по кабинету</h2>
@@ -1182,6 +1481,7 @@ function openHelp() {
       <p><strong>Карточки</strong> — каталог с поиском и оформлением.</p>
       <p><strong>Вывод</strong> — от ${MIN_WITHDRAW_SC} SC с конвертацией в ₽.</p>
       <p><strong>Бонусы</strong> — стрик, миссии, буст и достижения.</p>
+      <p><strong>Игры</strong> — колесо фортуны и мины со ставками SC (house edge).</p>
       <p><strong>Партнёры</strong> — ссылка, бонусы и список приглашённых.</p>
       <p><strong>Операции</strong> — полная лента движений по балансам.</p>
       <p><strong>FAQ</strong> — ответы о рисках, выводе и закрытии сервиса.</p>
@@ -1202,6 +1502,7 @@ function openSupport() {
           <option>Оформление карточки</option>
           <option>Вывод средств</option>
           <option>Партнёрская программа</option>
+          <option>Игры / ставки</option>
           <option>Другое</option>
         </select>
       </label>
@@ -1522,6 +1823,18 @@ function bindGlobal() {
       render();
     }
 
+    if (e.target.id === 'wheel-form') {
+      e.preventDefault();
+      const data = new FormData(e.target);
+      spinWheel(data.get('bet'));
+    }
+
+    if (e.target.id === 'mines-form') {
+      e.preventDefault();
+      const data = new FormData(e.target);
+      startMines(data.get('bet'), data.get('mines'));
+    }
+
     if (e.target.id === 'support-form') {
       e.preventDefault();
       const data = new FormData(e.target);
@@ -1595,6 +1908,10 @@ function bindGlobal() {
       } else {
         navigator.clipboard?.writeText(url).then(() => showToast('Ссылка скопирована'));
       }
+    }
+    if (e.target.closest('#mines-cashout')) doMinesCashout();
+    if (e.target.closest('[data-mine-cell]')) {
+      clickMineCell(e.target.closest('[data-mine-cell]').dataset.mineCell);
     }
     if (e.target.closest('#buy-vip-pack')) buyVipPack();
     if (e.target.closest('#confirm-vip-pack')) confirmVipPack();
