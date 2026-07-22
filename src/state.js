@@ -1,77 +1,129 @@
-const STORAGE_KEY = 'swipe-cabinet-v2';
+const STORAGE_KEY = 'swipe-cabinet-v3';
+
+/** Окупаемость ~ за 60 дней (2 месяца), дальше срок идёт в прибыль. */
+export const BREAK_EVEN_DAYS = 60;
+
+function dailyFromPrice(price) {
+  return Number((price / BREAK_EVEN_DAYS).toFixed(2));
+}
 
 export const PRODUCTS = [
   {
     id: 'micro',
     name: 'Микро',
-    price: 10,
-    daily: 0.04,
-    days: 14,
-    tag: 'МИКРО',
+    price: 50,
+    daily: dailyFromPrice(50),
+    days: 90,
+    tag: 'СТАРТОВАЯ',
     tier: 'mint',
     letter: 'μ',
-    desc: 'Короткий входной тариф, чтобы проверить механику без крупной суммы.',
+    desc: 'Входной тариф: около 50 ₽ возвращаются за ~2 месяца, ещё 30 дней — в плюс.',
   },
   {
     id: 'start',
     name: 'Старт',
-    price: 20,
-    daily: 0.1,
-    days: 30,
-    tag: 'НАЧАЛЬНАЯ',
+    price: 100,
+    daily: dailyFromPrice(100),
+    days: 90,
+    tag: 'БАЗОВАЯ',
     tier: 'orange',
     letter: 'S',
-    desc: 'Базовый вариант для знакомства с механикой сервиса.',
+    featured: true,
+    desc: 'Ориентир экономики SWIPE: вложили 100 ₽ → примерно через 2 месяца вышли в ноль, дальше прибыль.',
   },
   {
     id: 'plus',
     name: 'Плюс',
-    price: 50,
-    daily: 0.28,
-    days: 30,
+    price: 200,
+    daily: dailyFromPrice(200),
+    days: 90,
     tag: 'РАСШИРЕННАЯ',
     tier: 'purple',
     letter: 'P',
-    featured: true,
-    desc: 'Для тех, кто уже знаком с правилами и условиями.',
+    desc: 'Удвоенный объём относительно «Старта»: окупаемость ~60 дней, срок 90 дней.',
   },
   {
     id: 'season',
     name: 'Сезон',
-    price: 80,
-    daily: 0.55,
-    days: 21,
-    tag: 'ЛИМИТ',
+    price: 300,
+    daily: dailyFromPrice(300),
+    days: 100,
+    tag: 'СЕЗОН',
     tier: 'amber',
     letter: 'Σ',
     limited: true,
     stock: 37,
     stockMax: 50,
-    desc: 'Сезонное предложение с ограниченным количеством и ускоренным сроком.',
+    desc: 'Сезонный тариф с удлинённым хвостом прибыли после точки окупаемости.',
   },
   {
     id: 'momentum',
     name: 'Моментум',
-    price: 150,
-    daily: 0.9,
-    days: 30,
-    tag: 'ПРОФЕССИОНАЛЬНАЯ',
+    price: 500,
+    daily: dailyFromPrice(500),
+    days: 120,
+    tag: 'ПРОФ',
     tier: 'blue',
     letter: 'M',
-    desc: 'Расширенный лимит с полными условиями в договоре.',
+    desc: 'Длинный горизонт 120 дней: 2 месяца до окупаемости и ещё 2 месяца чистой прибыли.',
   },
   {
     id: 'pro',
     name: 'Про',
-    price: 300,
-    daily: 2.1,
-    days: 45,
+    price: 800,
+    daily: dailyFromPrice(800),
+    days: 120,
     tag: 'ПРО',
     tier: 'rose',
     letter: 'Π',
-    desc: 'Длинный горизонт и максимальный расчётный дневной доход в каталоге.',
+    desc: 'Максимальный обычный тариф: окупаемость ~60 дней, затем усиленная прибыль до дня 120.',
+  },
+  {
+    id: 'vip-nova',
+    name: 'VIP Nova',
+    price: 1000,
+    daily: dailyFromPrice(1000),
+    days: 120,
+    tag: 'VIP',
+    tier: 'gold',
+    letter: 'N',
+    vip: true,
+    desc: 'VIP-карточка номиналом 1000 ₽. Входит в VIP-аккаунт или покупается отдельно.',
+  },
+  {
+    id: 'vip-orbit',
+    name: 'VIP Orbit',
+    price: 5000,
+    daily: dailyFromPrice(5000),
+    days: 120,
+    tag: 'VIP',
+    tier: 'gold',
+    letter: 'O',
+    vip: true,
+    desc: 'VIP-карточка номиналом 5000 ₽ с длинным периодом после окупаемости.',
+  },
+  {
+    id: 'vip-apex',
+    name: 'VIP Apex',
+    price: 12000,
+    daily: dailyFromPrice(12000),
+    days: 120,
+    tag: 'VIP',
+    tier: 'gold',
+    letter: 'A',
+    vip: true,
+    desc: 'Топ VIP-карточка номиналом 12 000 ₽. Максимальный дневной доход в каталоге.',
   },
 ];
+
+export const VIP_PACK = {
+  id: 'vip-pack',
+  name: 'VIP Аккаунт',
+  price: 199,
+  faceValue: 18000,
+  includes: ['vip-nova', 'vip-orbit', 'vip-apex'],
+  desc: 'Скидочный VIP-аккаунт за 199 ₽: сразу три VIP-карточки номиналом 1000 ₽, 5000 ₽ и 12 000 ₽.',
+};
 
 export const REFERRAL_TIERS = [
   { id: 'basic', name: 'Базовый', min: 0, rate: 0.05, renewRate: 0.01, nextAt: 5 },
@@ -86,8 +138,18 @@ export const REFERRAL_STAGES = [
   { id: 'active', label: 'Активен', hint: 'Карточка работает' },
 ];
 
-export const LEVEL_TARGET = 500;
+export const LEVEL_TARGET = 1000;
 export const MIN_WITHDRAW = 100;
+
+export function productEconomics(product) {
+  const total = Number((product.daily * product.days).toFixed(2));
+  return {
+    total,
+    profit: Number((total - product.price).toFixed(2)),
+    breakEvenDays: BREAK_EVEN_DAYS,
+    roiPct: Math.round((total / product.price) * 100),
+  };
+}
 
 function uid(prefix = 'id') {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
@@ -107,10 +169,11 @@ function defaultState() {
       referralCode: 'alexey-k',
       twoFactor: false,
       payoutRequisites: '',
+      vip: false,
     },
     balances: {
-      purchase: 124.5,
-      withdraw: 78.2,
+      purchase: 250,
+      withdraw: 45,
     },
     cards: [
       {
@@ -119,31 +182,9 @@ function defaultState() {
         name: 'Старт',
         letter: 'S',
         tier: 'coral',
-        purchasedAt: '2026-07-03',
-        daily: 0.1,
-        days: 30,
-        status: 'active',
-      },
-      {
-        id: 'card_plus_1',
-        productId: 'plus',
-        name: 'Плюс',
-        letter: 'P',
-        tier: 'violet',
-        purchasedAt: '2026-07-10',
-        daily: 0.28,
-        days: 30,
-        status: 'active',
-      },
-      {
-        id: 'card_start_2',
-        productId: 'start',
-        name: 'Старт',
-        letter: 'S',
-        tier: 'coral',
-        purchasedAt: '2026-07-15',
-        daily: 0.1,
-        days: 30,
+        purchasedAt: '2026-06-22',
+        daily: dailyFromPrice(100),
+        days: 90,
         status: 'active',
       },
     ],
@@ -152,8 +193,8 @@ function defaultState() {
         id: uid('tx'),
         type: 'accrual',
         title: 'Начисление дохода',
-        detail: 'Старт + Плюс + Старт',
-        amount: 0.07,
+        detail: 'Старт',
+        amount: 1.67,
         balance: 'withdraw',
         at: now - 1000 * 60 * 45,
       },
@@ -162,18 +203,18 @@ function defaultState() {
         type: 'purchase',
         title: 'Оформление карточки',
         detail: 'Старт',
-        amount: -20,
+        amount: -100,
         balance: 'purchase',
-        at: Date.parse('2026-07-15T12:00:00'),
+        at: Date.parse('2026-06-22T12:00:00'),
       },
       {
         id: uid('tx'),
         type: 'deposit',
         title: 'Пополнение баланса',
         detail: 'Карта ••4582',
-        amount: 200,
+        amount: 350,
         balance: 'purchase',
-        at: Date.parse('2026-07-02T10:00:00'),
+        at: Date.parse('2026-06-20T10:00:00'),
       },
     ],
     withdrawals: [],
@@ -183,28 +224,31 @@ function defaultState() {
       {
         id: uid('n'),
         title: 'Добро пожаловать в SWIPE',
-        body: 'Кабинет готов. Оформите карточку или пополните баланс для покупок.',
+        body: 'Экономика карточек: окупаемость около 2 месяцев, дальше срок идёт в прибыль. VIP-аккаунт — 199 ₽.',
         read: false,
         at: now - 1000 * 60 * 20,
       },
       {
         id: uid('n'),
         title: 'До минимальной суммы вывода',
-        body: 'Осталось 21,80 ₽ до возможности заказать выплату.',
+        body: 'Осталось 55,00 ₽ до возможности заказать выплату.',
         read: false,
         at: now - 1000 * 60 * 60 * 3,
       },
     ],
-    earningsToday: 0.38,
-    earningsFromMidnight: 0.07,
+    earningsToday: 1.67,
+    earningsFromMidnight: 0.42,
     lastTick: now,
-    purchasedVolume: 124.5,
+    purchasedVolume: 100,
   };
 }
 
 export function loadState() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('swipe-cabinet-v1');
+    const raw =
+      localStorage.getItem(STORAGE_KEY) ||
+      localStorage.getItem('swipe-cabinet-v2') ||
+      localStorage.getItem('swipe-cabinet-v1');
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
     const base = defaultState();
@@ -212,7 +256,7 @@ export function loadState() {
       ...base,
       ...parsed,
       auth: { ...base.auth, ...parsed.auth },
-      user: { ...base.user, ...parsed.user },
+      user: { ...base.user, ...parsed.user, vip: Boolean(parsed.user?.vip) },
       balances: { ...base.balances, ...parsed.balances },
       seasonStock: parsed.seasonStock ?? base.seasonStock,
       referrals: Array.isArray(parsed.referrals)
@@ -302,10 +346,11 @@ export function estimateReferralBonus(state, purchaseAmount) {
 
 export function recommendProduct(balance) {
   const affordable = PRODUCTS.filter((p) => {
+    if (p.vip) return false;
     if (p.limited && balance < p.price) return false;
     return balance >= p.price;
   }).sort((a, b) => b.price - a.price);
-  return affordable[0] || PRODUCTS[0];
+  return affordable[0] || PRODUCTS.find((p) => !p.vip) || PRODUCTS[0];
 }
 
 export function tierClass(productTier) {
@@ -316,6 +361,22 @@ export function tierClass(productTier) {
     mint: 'mint',
     amber: 'amber',
     rose: 'rose',
+    gold: 'gold',
   };
   return map[productTier] || productTier;
+}
+
+export function makeCardFromProduct(product, purchasedAt = '2026-07-22') {
+  return {
+    id: uid('card'),
+    productId: product.id,
+    name: product.name,
+    letter: product.letter,
+    tier: tierClass(product.tier),
+    purchasedAt,
+    daily: product.daily,
+    days: product.days,
+    status: 'active',
+    vip: Boolean(product.vip),
+  };
 }

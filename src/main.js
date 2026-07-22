@@ -1,10 +1,12 @@
 import './style.css';
 import {
   PRODUCTS,
+  VIP_PACK,
   REFERRAL_TIERS,
   REFERRAL_STAGES,
   LEVEL_TARGET,
   MIN_WITHDRAW,
+  BREAK_EVEN_DAYS,
   loadState,
   saveState,
   makeId,
@@ -20,6 +22,8 @@ import {
   recommendProduct,
   tierClass,
   qualifiedReferrals,
+  productEconomics,
+  makeCardFromProduct,
 } from './state.js';
 
 let state = loadState();
@@ -72,7 +76,11 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Откуда берётся доход?',
-    a: 'В демо доход симулируется по активным карточкам и зачисляется на баланс для вывода. Расчётные показатели указаны до оформления и не гарантируются.',
+    a: `Каждая карточка каждый день начисляет фиксированный доход на баланс вывода. Правило экономики: примерно за ${BREAK_EVEN_DAYS} дней (около 2 месяцев) вы возвращаете стоимость карточки, а оставшийся срок идёт уже в прибыль.`,
+  },
+  {
+    q: 'Что такое VIP-аккаунт?',
+    a: `VIP-аккаунт стоит ${VIP_PACK.price} ₽ со скидкой и сразу включает три VIP-карточки номиналом 1000 ₽, 5000 ₽ и 12 000 ₽ (суммарно ${VIP_PACK.faceValue.toLocaleString('ru-RU')} ₽). Их также можно купить по отдельности по полной цене.`,
   },
   {
     q: 'Как работает партнёрская программа?',
@@ -212,7 +220,9 @@ function updateChrome() {
   document.querySelector('#sidebar-avatar').textContent = user.initials;
   document.querySelector('#top-avatar').textContent = user.initials;
   document.querySelector('#sidebar-name').textContent = user.name;
-  document.querySelector('#sidebar-status').textContent = `Статус: ${user.status}`;
+  document.querySelector('#sidebar-status').textContent = state.user.vip
+    ? 'Статус: VIP'
+    : `Статус: ${user.status}`;
   const unread = state.notifications.filter((n) => !n.read).length;
   els.notifyDot.hidden = unread === 0;
 }
@@ -348,20 +358,35 @@ function renderOverview() {
 
 function renderCatalog() {
   const tip = recommendProduct(state.balances.purchase);
+  const tipEco = productEconomics(tip);
+  const canVip = !state.user.vip && state.balances.purchase >= VIP_PACK.price;
   document.querySelector('#catalog').innerHTML = `
     <div class="welcome-row">
       <div>
         <p class="eyebrow">КАТАЛОГ</p>
         <h1>Выберите карточку</h1>
-        <p class="muted">Все параметры и срок действия указаны до оформления.</p>
+        <p class="muted">Окупаемость ≈ ${BREAK_EVEN_DAYS} дней · дальше срок идёт в прибыль.</p>
       </div>
       <div class="balance-chip">Доступно: <b>${money(state.balances.purchase)}</b></div>
     </div>
+
+    <div class="vip-pack ${state.user.vip ? 'owned' : ''}">
+      <div>
+        <p class="eyebrow">VIP АККАУНТ · СКИДКА</p>
+        <strong>${VIP_PACK.name} за ${money(VIP_PACK.price, 0)}</strong>
+        <p>Вместо ${money(VIP_PACK.faceValue, 0)} номинала: VIP Nova 1000 ₽ + VIP Orbit 5000 ₽ + VIP Apex 12 000 ₽.</p>
+        <p class="vip-note">${state.user.vip ? 'У вас уже активирован VIP-аккаунт.' : 'Одна покупка — три VIP-карточки сразу начисляются в портфель.'}</p>
+      </div>
+      <button class="primary-button compact-btn vip-btn" type="button" id="buy-vip-pack" ${state.user.vip || !canVip ? 'disabled' : ''}>
+        ${state.user.vip ? 'VIP активен' : canVip ? `Купить за ${money(VIP_PACK.price, 0)}` : 'Недостаточно средств'}
+      </button>
+    </div>
+
     <div class="recommend-banner">
       <div>
         <p class="eyebrow">РЕКОМЕНДАЦИЯ</p>
         <strong>Вам сейчас ближе «${tip.name}»</strong>
-        <p>По балансу ${money(state.balances.purchase)} это наиболее подходящий доступный тариф.</p>
+        <p>~${money(tip.price, 0)} вернутся за ${BREAK_EVEN_DAYS} дн. · за весь срок ≈ ${money(tipEco.total)} (плюс ${money(tipEco.profit)}).</p>
       </div>
       <button class="primary-button compact-btn" type="button" data-product="${tip.id}" ${state.balances.purchase >= tip.price ? '' : 'disabled'}>
         Оформить ${money(tip.price, 0)}
@@ -372,13 +397,14 @@ function renderCatalog() {
       <select id="catalog-filter">
         <option value="all">Все карточки</option>
         <option value="affordable">Доступные по балансу</option>
+        <option value="standard">Обычные</option>
+        <option value="vip">Только VIP</option>
         <option value="featured">Рекомендуемые</option>
-        <option value="short">Срок до 21 дня</option>
-        <option value="long">Срок от 30 дней</option>
+        <option value="long">Срок от 100 дней</option>
       </select>
     </div>
     <div class="catalog-grid" id="catalog-grid"></div>
-    <div class="notice"><span>i</span><p>Расчётные показатели приведены исключительно для демонстрации интерфейса. Перед любой операцией проверяйте юридические условия, риски и применимое законодательство. При закрытии сервиса средства могут быть утрачены без компенсации.</p></div>
+    <div class="notice"><span>i</span><p>Правило ценообразования: дневной доход = цена ÷ ${BREAK_EVEN_DAYS}. Через ~2 месяца карточка окупается, оставшиеся дни — прибыль. Показатели демонстрационные; при закрытии сервиса средства могут быть утрачены без компенсации.</p></div>
   `;
   paintCatalog();
 }
@@ -393,8 +419,9 @@ function paintCatalog() {
     if (q && !hay.includes(q)) return false;
     if (filter === 'affordable') return state.balances.purchase >= p.price;
     if (filter === 'featured') return Boolean(p.featured || p.limited);
-    if (filter === 'short') return p.days <= 21;
-    if (filter === 'long') return p.days >= 30;
+    if (filter === 'standard') return !p.vip;
+    if (filter === 'vip') return Boolean(p.vip);
+    if (filter === 'long') return p.days >= 100;
     return true;
   });
 
@@ -408,16 +435,18 @@ function paintCatalog() {
       const stock = p.limited ? state.seasonStock : null;
       const soldOut = p.limited && stock <= 0;
       const canBuy = !soldOut && state.balances.purchase >= p.price;
+      const eco = productEconomics(p);
       return `
-      <article class="product-card tone-${p.tier} ${p.featured ? 'featured' : ''} ${p.limited ? 'limited' : ''}" style="--delay:${index * 40}ms">
+      <article class="product-card tone-${p.tier} ${p.featured ? 'featured' : ''} ${p.limited ? 'limited' : ''} ${p.vip ? 'vip-card' : ''}" style="--delay:${index * 40}ms">
         ${p.featured ? '<div class="featured-label">ВЫБОР ПОЛЬЗОВАТЕЛЕЙ</div>' : ''}
+        ${p.vip ? '<div class="vip-chip">VIP</div>' : ''}
         ${p.limited ? `<div class="stock-chip">Осталось ${stock} / ${p.stockMax}</div>` : ''}
         <div class="product-top"><span class="tier-icon ${p.tier}">${p.letter}</span><span class="tag">${p.tag}</span></div>
         <h2>${p.name}</h2>
         <p>${p.desc}</p>
         <div class="price-row"><span>Стоимость</span><strong>${money(p.price, 0)}</strong></div>
-        <div class="income-row"><span>Расчётный доход в день</span><strong>${money(p.daily)}</strong></div>
-        <div class="terms">Срок: ${p.days} дней · ROI ~${((p.daily * p.days) / p.price * 100).toFixed(0)}%</div>
+        <div class="income-row"><span>Доход в день</span><strong>${money(p.daily)}</strong></div>
+        <div class="terms">Срок ${p.days} дн. · окупаемость ~${BREAK_EVEN_DAYS} дн. · всего ~${money(eco.total)} · плюс ~${money(eco.profit)}</div>
         <div class="product-actions">
           <button class="ghost-button" type="button" data-detail-product="${p.id}">Подробнее</button>
           <button class="primary-button buy-button" type="button" data-product="${p.id}" ${canBuy ? '' : 'disabled'}>
@@ -805,9 +834,11 @@ function register({ name, email, password }) {
     referralCode: email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 16) || 'user',
   };
   state.auth.loggedIn = true;
-  state.balances = { purchase: 100, withdraw: 0 };
+  state.balances = { purchase: 250, withdraw: 0 };
   state.cards = [];
   state.purchasedVolume = 0;
+  state.user.vip = false;
+  state.user.status = 'Стандарт';
   state.earningsToday = 0;
   state.earningsFromMidnight = 0;
   state.transactions = [
@@ -816,7 +847,7 @@ function register({ name, email, password }) {
       type: 'deposit',
       title: 'Стартовый бонус',
       detail: 'Зачисление на баланс покупок',
-      amount: 100,
+      amount: 250,
       balance: 'purchase',
       at: Date.now(),
     },
@@ -825,7 +856,7 @@ function register({ name, email, password }) {
     {
       id: makeId('n'),
       title: 'Аккаунт создан',
-      body: 'На баланс покупок зачислено 100 ₽ для знакомства с каталогом.',
+      body: `На баланс зачислено 250 ₽. Карточки окупаются примерно за ${BREAK_EVEN_DAYS} дней. VIP-пакет — ${VIP_PACK.price} ₽.`,
       read: false,
       at: Date.now(),
     },
@@ -875,18 +906,7 @@ function confirmBuy(productId) {
   state.balances.purchase = Number((state.balances.purchase - product.price).toFixed(2));
   state.purchasedVolume = Number((state.purchasedVolume + product.price).toFixed(2));
   if (product.limited) state.seasonStock = Math.max(0, state.seasonStock - 1);
-  const card = {
-    id: makeId('card'),
-    productId: product.id,
-    name: product.name,
-    letter: product.letter,
-    tier: tierClass(product.tier),
-    purchasedAt: '2026-07-22',
-    daily: product.daily,
-    days: product.days,
-    status: 'active',
-  };
-  state.cards.unshift(card);
+  state.cards.unshift(makeCardFromProduct(product));
   addTransaction({
     type: 'purchase',
     title: 'Оформление карточки',
@@ -894,7 +914,7 @@ function confirmBuy(productId) {
     amount: -product.price,
     balance: 'purchase',
   });
-  pushNotification('Карточка оформлена', `«${product.name}» активна. Доход начнёт поступать на баланс вывода.`);
+  pushNotification('Карточка оформлена', `«${product.name}» активна. Окупаемость ≈ ${BREAK_EVEN_DAYS} дней, дальше — прибыль.`);
   if (state.purchasedVolume >= LEVEL_TARGET && state.user.status === 'Стандарт') {
     state.user.status = 'Плюс';
     pushNotification('Новый статус', 'Вы достигли уровня «Плюс».');
@@ -902,6 +922,59 @@ function confirmBuy(productId) {
   persist();
   closeModal();
   showToast(`Карточка «${product.name}» оформлена`);
+  render();
+}
+
+function buyVipPack() {
+  if (state.user.vip) {
+    showToast('VIP уже активирован');
+    return;
+  }
+  if (state.balances.purchase < VIP_PACK.price) {
+    showToast('Недостаточно средств для VIP-аккаунта');
+    return;
+  }
+  openModal(`
+    <h2 id="modal-title">VIP Аккаунт за ${money(VIP_PACK.price, 0)}</h2>
+    <div class="prose">
+      <p>По скидке вы получаете сразу три VIP-карточки номиналом ${money(VIP_PACK.faceValue, 0)}:</p>
+      <ul>
+        ${VIP_PACK.includes
+          .map((id) => {
+            const p = PRODUCTS.find((x) => x.id === id);
+            const eco = productEconomics(p);
+            return `<li><strong>${p.name}</strong> — номинал ${money(p.price, 0)}, ${money(p.daily)}/день, срок ${p.days} дн., всего ~${money(eco.total)}</li>`;
+          })
+          .join('')}
+      </ul>
+      <p>С баланса покупок спишется только ${money(VIP_PACK.price, 0)}. Статус аккаунта станет VIP.</p>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost-button" type="button" data-close-modal>Отмена</button>
+      <button class="primary-button" type="button" id="confirm-vip-pack">Активировать VIP</button>
+    </div>
+  `);
+}
+
+function confirmVipPack() {
+  if (state.user.vip || state.balances.purchase < VIP_PACK.price) return;
+  state.balances.purchase = Number((state.balances.purchase - VIP_PACK.price).toFixed(2));
+  state.purchasedVolume = Number((state.purchasedVolume + VIP_PACK.faceValue).toFixed(2));
+  state.user.vip = true;
+  state.user.status = 'VIP';
+  const cards = VIP_PACK.includes.map((id) => makeCardFromProduct(PRODUCTS.find((p) => p.id === id)));
+  state.cards = [...cards, ...state.cards];
+  addTransaction({
+    type: 'purchase',
+    title: 'VIP Аккаунт',
+    detail: 'Nova + Orbit + Apex',
+    amount: -VIP_PACK.price,
+    balance: 'purchase',
+  });
+  pushNotification('VIP активирован', `Три VIP-карточки добавлены в портфель. Экономия относительно номинала — ${money(VIP_PACK.faceValue - VIP_PACK.price, 0)}.`);
+  persist();
+  closeModal();
+  showToast('VIP-аккаунт активирован');
   render();
 }
 
@@ -931,16 +1004,17 @@ function openCardDetail(cardId) {
   const product = PRODUCTS.find((p) => p.id === card.productId);
   const left = daysLeft(card);
   const earnedEstimate = Number((card.daily * (card.days - left)).toFixed(2));
+  const eco = product ? productEconomics(product) : null;
   openModal(`
     <h2 id="modal-title">Карточка «${card.name}»</h2>
     <div class="prose">
       <ul>
-        <li>Статус: активна</li>
+        <li>Статус: активна${card.vip || product?.vip ? ' · VIP' : ''}</li>
         <li>Оформлена: ${formatDay(card.purchasedAt)}</li>
         <li>Осталось дней: ${left}</li>
         <li>Доход в день: ${money(card.daily)}</li>
-        <li>Оценка начислений за период: ~${money(earnedEstimate)}</li>
-        ${product ? `<li>Полный расчёт за срок: ${money(product.daily * product.days)}</li>` : ''}
+        <li>Оценка начислений за прошедший период: ~${money(earnedEstimate)}</li>
+        ${eco ? `<li>Окупаемость: ~${BREAK_EVEN_DAYS} дней · всего за срок ~${money(eco.total)} · прибыль ~${money(eco.profit)}</li>` : ''}
       </ul>
       <p>${product?.desc || ''}</p>
     </div>
@@ -954,16 +1028,18 @@ function openCardDetail(cardId) {
 function openProductDetail(productId) {
   const p = PRODUCTS.find((x) => x.id === productId);
   if (!p) return;
+  const eco = productEconomics(p);
   openModal(`
     <h2 id="modal-title">${p.name}</h2>
     <div class="prose">
       <p>${p.desc}</p>
       <ul>
         <li>Стоимость: ${money(p.price, 0)}</li>
-        <li>Доход в день: ${money(p.daily)}</li>
+        <li>Доход в день: ${money(p.daily)} (= цена ÷ ${BREAK_EVEN_DAYS})</li>
         <li>Срок: ${p.days} дней</li>
-        <li>Ожидаемый итог: ${money(p.daily * p.days)}</li>
-        <li>Ориентир ROI: ${((p.daily * p.days) / p.price * 100).toFixed(0)}%</li>
+        <li>Окупаемость: ~${BREAK_EVEN_DAYS} дней (~2 месяца)</li>
+        <li>Всего за срок: ~${money(eco.total)}</li>
+        <li>Прибыль после окупаемости: ~${money(eco.profit)}</li>
       </ul>
       <p>Перед оформлением ознакомьтесь с <button type="button" class="inline-link" id="open-terms-from-detail">условиями сервиса</button>.</p>
     </div>
@@ -1392,6 +1468,8 @@ function bindGlobal() {
         navigator.clipboard?.writeText(url).then(() => showToast('Ссылка скопирована'));
       }
     }
+    if (e.target.closest('#buy-vip-pack')) buyVipPack();
+    if (e.target.closest('#confirm-vip-pack')) confirmVipPack();
     if (e.target.closest('#confirm-buy')) confirmBuy(e.target.closest('#confirm-buy').dataset.product);
     if (e.target.closest('#detail-buy')) {
       const id = e.target.closest('#detail-buy').dataset.product;
@@ -1417,6 +1495,7 @@ function bindGlobal() {
     if (e.target.closest('#reset-demo')) {
       localStorage.removeItem('swipe-cabinet-v1');
       localStorage.removeItem('swipe-cabinet-v2');
+      localStorage.removeItem('swipe-cabinet-v3');
       state = loadState();
       state.auth.loggedIn = true;
       persist();
